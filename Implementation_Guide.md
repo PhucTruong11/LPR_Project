@@ -12,20 +12,25 @@ Trước khi bắt tay vào code, cả nhóm cần thống nhất các công c�
 - **Công cụ làm việc với dữ liệu:** Sử dụng **Roboflow** (nền tảng web tiện lợi) hoặc **LabelImg** (tool chạy local) để dán nhãn dữ liệu cho YOLO.
 
 ### 2. Thiết lập Môi trường Ảo (Virtual Environment)
-Để tránh xung đột thư viện giữa các dự án trên máy, mỗi thành viên bắt buộc phải tạo môi trường ảo riêng.
+Để tránh xung đột thư viện và đảm bảo tương thích hoàn toàn với các thư viện AI (như `easyocr`, `opencv`), nhóm sẽ thống nhất sử dụng **Python 3.11**. Nếu bạn đang dùng bản mới hơn (như 3.13) có thể gặp lỗi khi cài đặt, vui lòng [tải và cài đặt Python 3.11.9 tại đây](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe) (nhớ tick "Add python.exe to PATH" khi cài).
 
 **Cách tạo và kích hoạt môi trường ảo (bằng `venv`):**
 ```bash
-# 1. Tạo môi trường ảo có tên 'lpr_env'
-python -m venv lpr_env
+# Xóa môi trường cũ nếu có (bỏ qua nếu mới làm lần đầu):
+# Để thoát môi trường cũ: deactivate
+# Trên Windows PowerShell: Remove-Item -Recurse -Force lpr_env
+# Hoặc xóa thủ công thư mục lpr_env bằng File Explorer
+
+# 1. Tạo môi trường ảo mới bằng Python 3.11 có tên 'lpr_env'
+py -3.11 -m venv lpr_env
 
 # 2. Kích hoạt môi trường (trên Windows):
-lpr_env\Scripts\activate
+.\lpr_env\Scripts\activate
 
 # Kích hoạt môi trường (trên MacOS/Linux):
 source lpr_env/bin/activate
 ```
-*(Lưu ý: Bạn sẽ thấy chữ `(lpr_env)` xuất hiện ở đầu dòng lệnh terminal khi kích hoạt thành công)*
+*(Lưu ý: Bạn sẽ thấy chữ `lpr_env` xuất hiện ở đầu dòng lệnh terminal khi kích hoạt thành công)*
 
 ### 3. Cài đặt thư viện (Dependencies)
 Tạo file `requirements.txt` tại thư mục gốc của dự án với nội dung sau:
@@ -41,6 +46,9 @@ torch
 ```bash
 pip install -r requirements.txt
 ```
+
+> **Lưu ý quan trọng khi cài đặt:**
+> Nếu bị lỗi `[WinError 32] The process cannot access the file because it is being used by another process` (thường do Windows Defender quét file), bạn chỉ cần **chạy lại lệnh `pip install -r requirements.txt` một lần nữa** là sẽ thành công.
 
 ---
 
