@@ -30,14 +30,14 @@ Dự án Nhận diện Biển số xe (LPR) được chia làm 5 trạm (Station
 **Phụ trách: 🚉 Trạm 1 (Input) & 🚉 Trạm 5 (Output)**
 
 **Nhiệm vụ:**
-- **[Trạm 1]** Xây dựng giao diện web sử dụng **Streamlit** để người dùng có thể upload ảnh/video đầu vào một cách dễ dàng.
+- **[Trạm 1]** Xây dựng giao diện web sử dụng **Streamlit** để thu thập dữ liệu đầu vào bằng cách quét hình ảnh hoặc video trực tiếp qua camera của laptop/điện thoại.
 - Viết code gộp các module rời rạc của Thành viên 1, 3, 4 lại thành một pipeline hoàn chỉnh (`Image -> YOLO -> OpenCV -> OCR -> Final Result`).
 - **[Trạm 5]** Tiếp nhận chuỗi text đầu ra, áp dụng RegEx hoặc logic làm sạch nếu cần (hỗ trợ Thành viên 4) và hiển thị kết quả cuối (ảnh đã vẽ bounding box + text biển số) lên giao diện.
 
 **Output cần đạt:** Giao diện Streamlit chạy trơn tru, xử lý mượt mà luồng dữ liệu 5 trạm từ đầu đến cuối để người dùng tương tác.
 
 **📚 Cần học:**
-- **Streamlit cơ bản:** Cách tạo nút bấm (`st.button`), tải ảnh (`st.file_uploader`), và hiển thị ảnh/text lên web.
+- **Streamlit cơ bản:** Cách tạo nút bấm (`st.button`), lấy hình ảnh từ camera (`st.camera_input`), và hiển thị ảnh/text lên web.
 - **Logic Pipeline:** Cách import hàm từ các file `.py` khác nhau vào file `app.py` chính.
 
 **🔗 Nguồn tham khảo & Công cụ:**
