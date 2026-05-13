@@ -54,10 +54,10 @@ Mỗi khi bạn làm xong một tính năng hoặc một đoạn code chạy ổ
 Để 4 người không sửa đè lên code của nhau, **MỖI NGƯỜI PHẢI LÀM VIỆC TRÊN MỘT NHÁNH RIÊNG**. Không ai được push trực tiếp vào nhánh `main` (hoặc `master`).
 
 ### Quy ước đặt tên nhánh cho 4 thành viên:
-* **Thành viên 1:** `tv1-ui-pipeline` (Làm giao diện và gộp code)
-* **Thành viên 2:** `tv2-yolo-detection` (Làm mô hình nhận diện)
-* **Thành viên 3:** `tv3-opencv-processing` (Xử lý ảnh bằng OpenCV)
-* **Thành viên 4:** `tv4-ocr-regex` (Nhận diện chữ và chuẩn hóa)
+* **Thành viên 1:** `feature-ui` (Làm giao diện và gộp code)
+* **Thành viên 2:** `feature-yolo` (Làm mô hình nhận diện)
+* **Thành viên 3:** `feature-opencv` (Xử lý ảnh bằng OpenCV)
+* **Thành viên 4:** `feature-ocr` (Nhận diện chữ và chuẩn hóa)
 
 ### Cách tạo và chuyển nhánh:
 ```bash
