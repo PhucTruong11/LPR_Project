@@ -85,7 +85,13 @@ def process_plate(image, bbox):
     # final_plate = cv2.bitwise_not(deskewed)
     final_plate = cv2.bitwise_not(thresh)
 
-    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    save_path = os.path.join(current_dir, "debug_plate2.jpg")
+
+    # Lưu ảnh trắng đen đã xử lý xong vào chính thư mục này
+    cv2.imwrite(save_path, final_plate)
+    print(f"✅ Đã lưu ảnh debug tại: {save_path}")
+
     return final_plate
 
 
