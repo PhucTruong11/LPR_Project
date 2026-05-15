@@ -1,21 +1,325 @@
-# Phụ trách: Thành viên 4 (Trạm 4: OCR & Trạm 5: Post-processing)
-# Nhiệm vụ: Đọc ký tự từ ảnh xử lý bằng EasyOCR và dọn dẹp kết quả bằng RegEx
-
-# import easyocr
+import easyocr
 import re
+import cv2
+import numpy as np
 
-def read_plate(processed_img):
+
+class PlateOCR:
     """
-    Hàm đọc ký tự từ ảnh biển số bằng EasyOCR và chuẩn hóa định dạng.
-    
-    Args:
-        processed_img: Ảnh nhị phân.
+    Class nhận dạng ký tự biển số xe Việt Nam.
+    Hỗ trợ cả biển dài (1 dòng) và biển vuông (2 dòng).
+    """
+
+    # -------------------------------------------------------------------------
+    # Bảng sửa lỗi OCR theo TỪNG VAI TRÒ của ký tự trong biển số
+    # -------------------------------------------------------------------------
+
+    # Vị trí SỐ (mã tỉnh, phần đuôi số): sửa chữ cái trông giống số → thành số
+    CHAR_TO_NUM = {
+        'O': '0', 'Q': '0', 'D': '0',   # Ký tự trông giống số 0
+        'I': '1', 'L': '1',              # Ký tự trông giống số 1
+        'Z': '2',                         # Ký tự trông giống số 2
+        'S': '5',                         # Ký tự trông giống số 5
+        'G': '6',                         # Ký tự trông giống số 6
+        'T': '7',                         # Ký tự trông giống số 7
+        'B': '8',                         # Ký tự trông giống số 8
+    }
+
+    # Vị trí CHỮ (ký tự series): sửa số trông giống chữ → thành chữ
+    NUM_TO_CHAR = {
+        '0': 'O',  # Số 0 trông giống chữ O (hoặc D - nhưng O phổ biến hơn trong series)
+        '1': 'A',  # Hiếm, nhưng phòng trường hợp
+        '8': 'B',  # Số 8 trông giống chữ B
+        '5': 'S',  # Số 5 trông giống chữ S
+        '6': 'G',  # Số 6 trông giống chữ G
+    }
+
+    def __init__(self, gpu=False):
+        """
+        Khởi tạo EasyOCR reader.
+        Args:
+            gpu (bool): Dùng GPU nếu có, mặc định False cho máy không có card đồ họa.
+        """
+        print("⏳ Đang khởi tạo EasyOCR (lần đầu có thể mất vài giây)...")
+        self.reader = easyocr.Reader(['en'], gpu=gpu)
+        print("✅ EasyOCR đã sẵn sàng!")
+
+    # =========================================================================
+    # HÀM CHÍNH — Thành viên 2 và main.py sẽ gọi hàm này
+    # =========================================================================
+
+    def read_plate(self, image):
+        img = self._load_image(image)
+        if img is None:
+            return ""
+
+        # --- BỔ SUNG: Khử nhiễu nhẹ nếu ảnh là ảnh nhị phân ---
+        # Giúp loại bỏ các đốm li ti (salt and pepper noise)
+        if len(img.shape) == 2: # Nếu là ảnh xám/nhị phân
+             img = cv2.medianBlur(img, 3) 
         
-    Returns:
-        str: Chuỗi văn bản biển số đã được làm sạch và chuẩn hóa (VD: '30G12345').
-    """
-    # TODO: Khởi tạo EasyOCR reader
-    # TODO: Đọc text và xử lý nối chữ nếu là biển 2 dòng
-    # TODO: Dùng RegEx dọn dẹp các ký tự thừa
-    
-    return ""
+        # --- Bước 1: Chạy EasyOCR với tham số tối ưu hơn ---
+        # Tăng cường độ chính xác cho biển số vuông
+        results = self.reader.readtext(
+            img, 
+            decoder='beamsearch', # Chậm hơn chút nhưng chính xác hơn
+            paragraph=False, 
+            width_ths=0.7,      # Tăng khả năng gộp các ký tự ở xa nhau
+            contrast_ths=0.1
+        )
+
+        if not results:
+            return ""
+
+        # Lọc kết quả: Chỉ lấy những box có khả năng là chữ/số
+        MIN_CONFIDENCE = 0.2
+        results = [r for r in results if r[2] > MIN_CONFIDENCE]
+
+        # Sắp xếp và ghép text (Dùng hàm _sort_and_merge cũ của bạn)
+        raw_text = self._sort_and_merge(results, img)
+        
+        # Làm sạch và sửa lỗi
+        final_text = self.clean_and_fix(raw_text)
+        return final_text
+
+    # =========================================================================
+    # XỬ LÝ SẮP XẾP — Giải quyết bài toán biển số 2 dòng
+    # =========================================================================
+
+    def _sort_and_merge(self, results, img):
+        """
+        Sắp xếp các vùng text theo đúng thứ tự đọc, xử lý cả biển 1 dòng & 2 dòng.
+
+        Vấn đề với biển số 2 dòng (biển vuông):
+            Dòng 1: "30G1"  ← phần trên, Y nhỏ
+            Dòng 2: "2345"  ← phần dưới, Y lớn
+        EasyOCR có thể trả về không theo thứ tự, cần nhóm và sắp xếp lại.
+
+        Logic:
+            1. Tính Y trung tâm của mỗi vùng text.
+            2. Nhóm các vùng có Y gần nhau vào cùng một "dòng".
+            3. Trong mỗi dòng, sắp xếp từ trái → phải theo X.
+            4. Ghép nối các dòng từ trên → xuống.
+        """
+        img_height = img.shape[0]
+
+        # Hàm tính tọa độ trung tâm của bounding box EasyOCR
+        # bbox format: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]] (4 điểm góc)
+        def center_y(r):
+            bbox = r[0]
+            return (bbox[0][1] + bbox[2][1]) / 2.0
+
+        def center_x(r):
+            bbox = r[0]
+            return (bbox[0][0] + bbox[2][0]) / 2.0
+
+        # Sắp xếp tất cả theo Y (từ trên xuống dưới) trước
+        results_by_y = sorted(results, key=center_y)
+
+        # Ngưỡng để xác định "cùng dòng" = 30% chiều cao ảnh
+        # Nếu 2 vùng text có Y trung tâm cách nhau < threshold → cùng 1 dòng
+        line_threshold = img_height * 0.30
+
+        # Gom nhóm thành các dòng
+        lines = []
+        current_line = [results_by_y[0]]
+
+        for r in results_by_y[1:]:
+            # Y trung bình của dòng hiện tại
+            current_line_avg_y = np.mean([center_y(x) for x in current_line])
+            if abs(center_y(r) - current_line_avg_y) <= line_threshold:
+                current_line.append(r)
+            else:
+                lines.append(current_line)
+                current_line = [r]
+        lines.append(current_line)
+
+        # Trong mỗi dòng: sắp xếp từ trái sang phải theo X
+        for line in lines:
+            line.sort(key=center_x)
+
+        # Log để debug
+        if len(lines) == 1:
+            print("📏 Phát hiện: Biển số 1 DÒNG (biển dài)")
+        else:
+            print(f"📐 Phát hiện: Biển số {len(lines)} DÒNG (biển vuông)")
+
+        # Ghép tất cả text lại theo thứ tự từ trên xuống dưới, trái sang phải
+        raw_text = ""
+        for line in lines:
+            for (_, text, _) in line:
+                raw_text += text.upper()
+
+        return raw_text
+
+    # =========================================================================
+    # HẬU XỬ LÝ — Sửa lỗi OCR theo luật biển số Việt Nam
+    # =========================================================================
+
+    def clean_and_fix(self, text):
+        """
+        Làm sạch và sửa lỗi văn bản OCR theo cấu trúc biển số Việt Nam.
+
+        Cấu trúc biển số VN (theo Thông tư 58/2020/TT-BCA):
+        ┌─────────────────────────────────────────────────────┐
+        │  [2 số Mã Tỉnh] [1-2 ký tự Series] [4-5 số Đuôi]  │
+        │  Ví dụ:   30    G         1          2345           │
+        │           51    F                    12345          │
+        └─────────────────────────────────────────────────────┘
+        
+        Quy tắc sửa lỗi theo VỊ TRÍ:
+            - Vị trí 0, 1   : Mã tỉnh → BẮT BUỘC là SỐ
+            - Vị trí 2      : Ký tự series chính → BẮT BUỘC là CHỮ
+            - Vị trí 3      : Series phụ (nếu có) → Chữ HOẶC số, giữ nguyên
+            - Vị trí 4+     : Phần số đuôi → BẮT BUỘC là SỐ
+
+        Args:
+            text (str): Chuỗi thô từ OCR (đã viết hoa).
+
+        Returns:
+            str: Chuỗi biển số đã được sửa lỗi.
+        """
+        # --- Bước 1: Làm sạch sơ bộ ---
+        # Xóa mọi ký tự không phải chữ cái hoặc chữ số (dấu gạch ngang, dấu cách, v.v.)
+        text = re.sub(r'[^A-Z0-9]', '', text.upper())
+        print(f"🧹 Sau làm sạch: '{text}'")
+
+        if len(text) < 4:
+            print("⚠️  Chuỗi quá ngắn, không thể phân tích.")
+            return text
+
+        chars = list(text)
+
+        # --- Bước 2: Sửa lỗi theo VỊ TRÍ ---
+
+        # [ VỊ TRÍ 0 & 1 ]: Mã tỉnh thành phố → PHẢI là SỐ
+        # EasyOCR hay nhầm: D→0, O→0, B→8, S→5, I→1
+        for i in range(min(2, len(chars))):
+            if chars[i] in self.CHAR_TO_NUM:
+                print(f"   🔧 Vị trí {i}: '{chars[i]}' → '{self.CHAR_TO_NUM[chars[i]]}' (sửa thành số)")
+                chars[i] = self.CHAR_TO_NUM[chars[i]]
+
+        # [ VỊ TRÍ 2 ]: Ký tự series chính → PHẢI là CHỮ CÁI
+        # EasyOCR hay nhầm: 0→O, 8→B, 5→S, 6→G
+        if len(chars) > 2 and chars[2].isdigit():
+            old = chars[2]
+            chars[2] = self.NUM_TO_CHAR.get(chars[2], chars[2])
+            print(f"   🔧 Vị trí 2: '{old}' → '{chars[2]}' (sửa thành chữ)")
+
+        # [ VỊ TRÍ 3 ]: Series phụ → CÓ THỂ là chữ HOẶC số
+        # Không tự động sửa vị trí này vì có 2 trường hợp hợp lệ:
+        #   - "30G12345": chars[3] = '1' (số) → bắt đầu phần đuôi luôn
+        #   - "51FA1234": chars[3] = 'A' (chữ) → series phụ, đuôi bắt đầu từ [4]
+        # → Giữ nguyên, để RegEx validate phía dưới phán xét
+
+        # [ VỊ TRÍ 4 TRỞ ĐI ]: Phần số đuôi → PHẢI là SỐ
+        # Xác định vị trí bắt đầu của phần đuôi số:
+        #   Nếu chars[3] là chữ (series phụ) → đuôi số bắt đầu từ index 4
+        #   Nếu chars[3] là số               → đuôi số bắt đầu từ index 3
+        if len(chars) > 3:
+            num_start_idx = 4 if (chars[3].isalpha()) else 3
+            for i in range(num_start_idx, len(chars)):
+                if chars[i] in self.CHAR_TO_NUM:
+                    print(f"   🔧 Vị trí {i}: '{chars[i]}' → '{self.CHAR_TO_NUM[chars[i]]}' (sửa thành số)")
+                    chars[i] = self.CHAR_TO_NUM[chars[i]]
+
+        fixed_text = "".join(chars)
+        print(f"🔩 Sau sửa lỗi vị trí: '{fixed_text}'")
+
+        # --- Bước 3: Validate định dạng bằng RegEx ---
+        self._validate_format(fixed_text)
+
+        return fixed_text
+
+    def _validate_format(self, text):
+        """
+        Kiểm tra xem biển số có đúng định dạng Việt Nam không.
+        Chỉ dùng để log cảnh báo, không thay đổi kết quả.
+
+        Các định dạng hợp lệ:
+            - Biển thường (xe máy/ô tô): 30G12345  → ^[0-9]{2}[A-Z][0-9]{4,5}$
+            - Biển có series phụ:        51FA1234  → ^[0-9]{2}[A-Z][A-Z][0-9]{4,5}$
+            - Biển xe máy số phụ:        30G12345  (same as first)
+        """
+        # Pattern tổng quát bao gồm cả 2 loại
+        pattern = r'^[0-9]{2}[A-Z][A-Z0-9]?[0-9]{4,5}$'
+
+        if re.match(pattern, text):
+            print(f"✅ Biển số HỢP LỆ: {text}")
+        else:
+            # Thử chẩn đoán lỗi cụ thể hơn để debug
+            if len(text) < 7:
+                print(f"⚠️  '{text}' — Quá ngắn (cần ít nhất 7 ký tự)")
+            elif len(text) > 9:
+                print(f"⚠️  '{text}' — Quá dài (tối đa 9 ký tự)")
+            elif not text[:2].isdigit():
+                print(f"⚠️  '{text}' — 2 ký tự đầu không phải số (mã tỉnh sai)")
+            elif not text[2].isalpha():
+                print(f"⚠️  '{text}' — Ký tự thứ 3 không phải chữ (series sai)")
+            else:
+                print(f"⚠️  '{text}' — Định dạng chưa khớp, có thể OCR bị sót/thừa ký tự")
+
+    # =========================================================================
+    # TIỆN ÍCH
+    # =========================================================================
+
+    def _load_image(self, image):
+        """
+        Hỗ trợ nhận ảnh từ nhiều nguồn khác nhau trong pipeline.
+        
+        Args:
+            image: numpy array (từ processing.py) hoặc str (đường dẫn file).
+        
+        Returns:
+            numpy array hoặc None nếu lỗi.
+        """
+        if isinstance(image, np.ndarray):
+            # Nhận trực tiếp từ processing.py (numpy array BGR hoặc Grayscale)
+            return image
+        elif isinstance(image, str):
+            # Đọc từ đường dẫn file (dùng khi test trực tiếp)
+            img = cv2.imread(image)
+            if img is None:
+                print(f"❌ Lỗi: Không tìm thấy file ảnh tại '{image}'")
+            return img
+        else:
+            print(f"❌ Lỗi: Kiểu dữ liệu không hỗ trợ: {type(image)}")
+            return None
+
+    # Giữ lại tên cũ để tương thích với code khác trong nhóm đã viết
+    def process_ocr(self, image):
+        """Alias của read_plate() để tương thích ngược."""
+        return self.read_plate(image)
+
+
+# =============================================================================
+# CHẠY THỬ NGHIỆM TRỰC TIẾP
+# =============================================================================
+
+if __name__ == "__main__":
+    import os
+    import sys
+
+    ocr = PlateOCR(gpu=False)
+    print("\n" + "="*55)
+
+    # Kiểm tra xem có truyền argument từ terminal không
+    # Ví dụ: python ocr_engine.py test_plate.jpg
+    if len(sys.argv) > 1:
+        image_input = sys.argv[1]
+    else:
+        # Mặc định: chạy với ảnh test trong cùng thư mục
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        image_input = os.path.join(current_dir, "debug_plate2.jpg")
+
+    print(f"🖼️  Đang xử lý: {image_input}")
+    print("="*55)
+
+    result = ocr.read_plate(image_input)
+
+    print("="*55)
+    if result:
+        print(f"🚗 KẾT QUẢ BIỂN SỐ: [ {result} ]")
+    else:
+        print("❌ Không đọc được biển số.")
+    print("="*55)
