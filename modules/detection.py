@@ -7,7 +7,7 @@ from ultralytics import YOLO
 import numpy as np
 
 # Load mô hình YOLO
-model = YOLO("models/best.pt")
+model = YOLO("models/best_second.pt")
 
 def detect_license_plate(image):
     """
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     import os
     
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    test_path = os.path.join(current_dir, "test_xemay2.jpg")
+    test_path = os.path.join(current_dir, "test5.jpg")
     test_img = cv2.imread(test_path)
     
     if test_img is not None:

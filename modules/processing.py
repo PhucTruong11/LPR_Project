@@ -95,7 +95,7 @@ if __name__ == "__main__":
     # img = cv2.imread(image_path)
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    image_path = os.path.join(current_dir, "test_xemay1.jpg") # Bỏ ảnh gốc (chưa crop) vào đây nhé
+    image_path = os.path.join(current_dir, "test5.jpg")
     
     img = cv2.imread(image_path)
     
@@ -116,15 +116,3 @@ if __name__ == "__main__":
             cv2.destroyAllWindows()
         else:
             print("Khong tim thay bien so")
-
-        # h, w = img.shape[:2] 
-        
-        # mock_bbox = [0, 0, w, h] 
-        
-        # processed_img = process_plate(img, mock_bbox)
-        
-        # cv2.imshow("Anh Goc", img)
-        # cv2.imshow("Bien So Da Xu Ly (Trang Den)", processed_img)
-        
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
