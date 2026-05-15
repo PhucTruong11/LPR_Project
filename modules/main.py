@@ -1,69 +1,116 @@
 import cv2
 import numpy as np
+import os
 from detection_vipham import detect_vehicles, get_plate_coordinates
-from processing import process_plate # Gọi hàm của bạn (Phú)
+from processing import process_plate
 
 # --- CÀI ĐẶT THÔNG SỐ VƯỢT ĐÈN ĐỎ ---
-# Tọa độ Y của vạch dừng (Cần chỉnh lại cho khớp với video/ảnh thực tế)
-STOP_LINE_Y = 400 
-# Giả lập đèn đang Đỏ (Khi làm UI web, bạn có thể biến nó thành nút bấm)
-IS_RED_LIGHT = True 
+# Tọa độ Y của vạch dừng (Cần chỉnh lại cho khớp với góc quay của camera trong video)
+STOP_LINE_Y = 500 
 
-def run_traffic_system(image_path):
-    img = cv2.imread(image_path)
-    if img is None:
-        print("Lỗi đọc ảnh!")
+# Giả lập đèn: Nhấn phím 'r' trên bàn phím để bật Đèn Đỏ, phím 'g' để bật Đèn Xanh
+is_red_light = False 
+
+def run_traffic_system_video(video_path):
+    global is_red_light
+    
+    cap = cv2.VideoCapture(video_path)
+    
+    if not cap.isOpened():
+        print(f"Lỗi: Không thể mở video tại {video_path}")
         return
-    
-    h_img, w_img = img.shape[:2]
-    
-    # 1. Vẽ vạch dừng màu vàng lên ảnh để dễ nhìn
-    cv2.line(img, (0, STOP_LINE_Y), (w_img, STOP_LINE_Y), (0, 255, 255), 2)
-    cv2.putText(img, "VACH DUNG", (10, STOP_LINE_Y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-    # 2. Tìm tất cả các xe đang chạy trên đường
-    vehicle_boxes = detect_vehicles(img)
-    print(f"🚗 Tìm thấy {len(vehicle_boxes)} phương tiện.")
-
-    # 3. Quét từng chiếc xe để phán xét
-    for v_box in vehicle_boxes:
-        vx1, vy1, vx2, vy2 = map(int, v_box)
+    print("🚀 Đang chạy hệ thống giám sát trên video...")
+    print("👉 HƯỚNG DẪN: Bấm 'r' để bật Đèn Đỏ, 'g' để bật Đèn Xanh. Bấm 'q' để thoát.")
+    
+    # Biến đếm frame để xử lý vấn đề FPS (Skip frames)
+    frame_count = 0
+    
+    while True:
+        ret, frame = cap.read()
         
-        # LOGIC PHÁN XÉT VƯỢT ĐÈN ĐỎ:
-        # Nếu đáy của chiếc xe (vy2) vượt qua Vạch Dừng (STOP_LINE_Y) VÀ Đèn đang Đỏ
-        if vy2 > STOP_LINE_Y and IS_RED_LIGHT:
-            color = (0, 0, 255) # Khung Đỏ (Vi phạm)
-            label = "VI PHAM"
+        # Nếu đã đọc hết video thì thoát vòng lặp
+        if not ret:
+            print("Đã phát hết video.")
+            break
             
-            # --- BẮT ĐẦU XỬ LÝ BIỂN SỐ ---
-            # Cắt riêng tấm ảnh chiếc xe vi phạm này ra
-            vehicle_crop = img[max(0, vy1):min(h_img, vy2), max(0, vx1):min(w_img, vx2)]
+        frame_count += 1
+        
+        # CHỐNG LAG: Chỉ cho YOLO quét 1 lần mỗi 3 frames (Skip Frames)
+        # Giúp hệ thống chạy mượt hơn trên máy yếu
+        if frame_count % 3 != 0:
+            continue
             
-            # Đưa tấm ảnh chiếc xe cho YOLO số 2 tìm biển số
-            plate_box = get_plate_coordinates(vehicle_crop)
-            
-            if plate_box is not None:
-                print("🚨 Đã túm được biển số xe vi phạm!")
-                # Lưu ý: Tọa độ plate_box lúc này là tọa độ tương đối bên trong tấm ảnh vehicle_crop
-                # Đưa cho hàm xử lý của Phú làm rõ nét chữ
-                processed_plate = process_plate(vehicle_crop, plate_box)
-                
-                # Hiển thị biển số trắng đen (Giả lập việc gửi cho OCR đọc)
-                cv2.imshow("Bien So Vi Pham", processed_plate)
-                
-        else:
-            color = (0, 255, 0) # Khung Xanh (Ngoan ngoãn)
-            label = "HOP LE"
+        h_img, w_img = frame.shape[:2]
+        
+        # Vẽ vạch dừng và hiển thị trạng thái đèn
+        line_color = (0, 0, 255) if is_red_light else (0, 255, 0)
+        light_text = "DEN DO" if is_red_light else "DEN XANH"
+        
+        cv2.line(frame, (0, STOP_LINE_Y), (w_img, STOP_LINE_Y), line_color, 2)
+        cv2.putText(frame, f"Trang thai: {light_text}", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, line_color, 3)
 
-        # Vẽ khung bao quanh chiếc xe
-        cv2.rectangle(img, (vx1, vy1), (vx2, vy2), color, 3)
-        cv2.putText(img, label, (vx1, vy1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        # YOLO số 1: Tìm tất cả các xe
+        vehicle_boxes = detect_vehicles(frame)
 
-    # Hiển thị ảnh tổng quan
-    cv2.imshow("He Thong Giam Sat", img)
-    cv2.waitKey(0)
+        # Quét từng chiếc xe để phán xét
+        if vehicle_boxes is not None:
+            for v_box in vehicle_boxes:
+                vx1, vy1, vx2, vy2 = map(int, v_box)
+                
+                # BẮT LỖI VƯỢT ĐÈN ĐỎ
+                # Điều kiện 1: Đèn đang Đỏ
+                # Điều kiện 2: Đáy chiếc xe (vy2) vượt qua vạch dừng
+                # Điều kiện 3 (Mới thêm để tránh bắt nhầm xe ở tít xa): Đỉnh chiếc xe (vy1) cũng phải gần vạch dừng
+                if is_red_light and vy2 > STOP_LINE_Y and vy1 < STOP_LINE_Y + 150:
+                    color = (0, 0, 255) # Khung Đỏ (Vi phạm)
+                    label = "VI PHAM"
+                    
+                    # Cắt ảnh xe vi phạm
+                    vehicle_crop = frame[max(0, vy1):min(h_img, vy2), max(0, vx1):min(w_img, vx2)]
+                    
+                    if vehicle_crop.size > 0:
+                        # YOLO số 2: Tìm biển số
+                        plate_box = get_plate_coordinates(vehicle_crop)
+                        
+                        if plate_box is not None:
+                            # Xử lý làm nét biển số
+                            processed_plate = process_plate(vehicle_crop, plate_box)
+                            
+                            # Hiển thị biển số trắng đen ở góc màn hình để dễ theo dõi
+                            cv2.imshow("Bien So Vi Pham", processed_plate)
+                            # (Tương lai: Chỗ này sẽ chuyển processed_plate cho OCR đọc)
+                            
+                else:
+                    color = (0, 255, 0) # Khung Xanh (Hợp lệ)
+                    label = "HOP LE"
+
+                # Vẽ khung và text cho chiếc xe
+                cv2.rectangle(frame, (vx1, vy1), (vx2, vy2), color, 2)
+                cv2.putText(frame, label, (vx1, vy1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+        # Hiển thị Frame lên màn hình
+        # Resize nhẹ lại cửa sổ nếu video quá to (Ví dụ full HD)
+        display_frame = cv2.resize(frame, (1024, 768))
+        cv2.imshow("He Thong Giam Sat Giao Thong LPR", display_frame)
+        
+        # Xử lý phím bấm (Dùng waitKey(1) để video chạy liên tục)
+        key = cv2.waitKey(1) & 0xFF
+        
+        if key == ord('q'): # Bấm 'q' để quit
+            break
+        elif key == ord('r'): # Bấm 'r' để bật đèn đỏ
+            is_red_light = True
+            print("Đã chuyển sang ĐÈN ĐỎ")
+        elif key == ord('g'): # Bấm 'g' để bật đèn xanh
+            is_red_light = False
+            print("Đã chuyển sang ĐÈN XANH")
+
+    cap.release()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    # Đi kiếm 1 tấm ảnh ngã tư có xe chạy qua để test nhé!
-    run_traffic_system("modules/test_ngatu.jpg")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    video_path = os.path.join(current_dir, "video_ngatu.mp4") 
+    
+    run_traffic_system_video(video_path)
