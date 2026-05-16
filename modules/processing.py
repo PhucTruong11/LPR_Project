@@ -7,51 +7,7 @@ import os
 
 from detection import detect_license_plate
 
-# def deskew(image):
-#     """
-#     Hàm xoay ảnh chống nghiêng (Deskewing).
-#     Sử dụng khung bao nhỏ nhất (minAreaRect) chứa các pixel chữ.
-#     """
-#     # Lấy tọa độ của tất cả các điểm ảnh (text) có giá trị > 0 (màu trắng)
-#     coords = np.column_stack(np.where(image > 0))
-#     if len(coords) == 0:
-#         return image
-        
-#     # Tính toán hình chữ nhật nhỏ nhất bao quanh cụm điểm ảnh
-#     angle = cv2.minAreaRect(coords)[-1]
-
-#     # Điều chỉnh góc xoay theo phiên bản OpenCV
-#     if angle > 45:
-#         angle = 90 - angle
-#     else:
-#         angle = -angle
-
-#     # Tâm ảnh
-#     (h, w) = image.shape[:2]
-#     center = (w // 2, h // 2)
-    
-#     # Ma trận xoay và thực hiện xoay
-#     M = cv2.getRotationMatrix2D(center, angle, 1.0)
-#     # Dùng BORDER_REPLICATE để tránh viền đen khi xoay
-#     rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-    
-#     return rotated
-
-
 def process_plate(image, bbox):
-    """
-    Hàm cắt và xử lý ảnh biển số xe (Grayscale, CLAHE, Binarization...).
-    
-    Args:
-        image: Ảnh gốc (BGR).
-        bbox: Tọa độ biển số [x_min, y_min, x_max, y_max].
-        
-    Returns:
-        Ảnh đã xử lý nhị phân hóa (trắng đen).
-    """
-    # TODO: Viết code cắt ảnh bằng numpy array (slicing)
-    # TODO: OpenCV (Grayscale -> CLAHE -> Blur -> Threshold)
-    
     # 1. Cắt ảnh (Crop)
     h_img, w_img = image.shape[:2]
     x_min, y_min, x_max, y_max = map(int, bbox)
@@ -61,45 +17,71 @@ def process_plate(image, bbox):
 
     plate_crop = image[y_min:y_max, x_min:x_max]
     
+    # Chặn lỗi nếu vùng cắt bị rỗng
     if plate_crop.size == 0:
-        return image
+        return None
 
     # 2. Xử lý ảnh (Processing)
-    gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
+    # gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
+
+    # # 3. Tăng tương phản (Contrast Enhancement)
+    # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    # enhanced = clahe.apply(gray)
+    
+    # # 4. Giảm nhiễu (Noise Reduction)
+    # blur = cv2.GaussianBlur(enhanced, (5,5), 0)
+    
+    # # 5. Nhị phân hóa (Binarization)
+    # # Chú ý: Dùng THRESH_BINARY_INV để chữ thành màu trắng (255) và nền đen (0) -> giúp hàm deskew tìm tọa độ chữ tốt hơn.
+    # thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+    
+    # 6. Chống nghiêng (Deskewing)
+    # deskewed = deskew(thresh)
+
+    # Ép mọi biển số về cùng chiều cao 200px để thuật toán chạy ổn định
+    h_crop, w_crop = plate_crop.shape[:2]
+    ratio = 200.0 / float(h_crop)
+    plate_crop = cv2.resize(plate_crop, (int(w_crop * ratio), 200), interpolation=cv2.INTER_CUBIC)
+
+    # 2. Xử lý ảnh: Hệ màu HSV lấy kênh V (Độ sáng)
+    hsv = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2HSV)
+    v_channel = cv2.split(hsv)[2]
 
     # 3. Tăng tương phản (Contrast Enhancement)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    enhanced = clahe.apply(gray)
+    enhanced = clahe.apply(v_channel)
     
     # 4. Giảm nhiễu (Noise Reduction)
     blur = cv2.GaussianBlur(enhanced, (5,5), 0)
     
     # 5. Nhị phân hóa (Binarization)
-    # Chú ý: Dùng THRESH_BINARY_INV để chữ thành màu trắng (255) và nền đen (0) -> giúp hàm deskew tìm tọa độ chữ tốt hơn.
-    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
-    
-    # 6. Chống nghiêng (Deskewing)
-    # deskewed = deskew(thresh)
-    
-    # (Tuỳ chọn) Nếu OCR cần chữ đen nền trắng thì đảo ngược lại:
-    # final_plate = cv2.bitwise_not(deskewed)
-    final_plate = cv2.bitwise_not(thresh)
+    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 5)
+
+    # 6. Xóa các hạt nhiễu li ti
+    clean_thresh = cv2.medianBlur(thresh, 3)
+
+    # 7. Nối liền các nét chữ bị đứt đoạn do rỗ ảnh
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    clean_thresh = cv2.morphologyEx(clean_thresh, cv2.MORPH_CLOSE, kernel)
+
+    # 8. Đảo màu về chuẩn Đen/Trắng cho OCR
+    final_plate = cv2.bitwise_not(clean_thresh)
+
+    # 9. Bọc viền trắng 15px để các chữ cái sát mép không bị OCR bỏ qua
+    final_plate = cv2.copyMakeBorder(final_plate, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     save_path = os.path.join(current_dir, "debug_plate2.jpg")
 
     # Lưu ảnh trắng đen đã xử lý xong vào chính thư mục này
     cv2.imwrite(save_path, final_plate)
-    print(f"✅ Đã lưu ảnh debug tại: {save_path}")
+    print(f"Đã lưu ảnh debug tại: {save_path}")
 
     return final_plate
 
 
 if __name__ == "__main__":
-
-    # image_path = "modules/test_xemay.jpg" 
-    # img = cv2.imread(image_path)
-
     current_dir = os.path.dirname(os.path.abspath(__file__))
     image_path = os.path.join(current_dir, "test5.jpg")
     
