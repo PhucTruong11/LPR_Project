@@ -1,4 +1,4 @@
-# 🚗 Hệ thống Nhận diện Biển số xe (LPR - License Plate Recognition)
+# Smart Parking System - Hệ thống Quản lý Bãi xe Thông minh sử dụng AI
 
 [![Python Version](https://img.shields.io/badge/Python-3.9%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
@@ -6,8 +6,8 @@
 
 ## 📋 Mục lục
 - [Giới thiệu](#-giới-thiệu)
-- [Tính năng](#-tính-năng)
-- [Công nghệ sử dụng](#-công-nghệ-sử-dụng)
+- [Tính năng chính](#-tính-năng-chính)
+- [Công cụ & Thư viện](#-công-cụ--thư-viện)
 - [Cấu trúc thư mục](#-cấu-trúc-thư-mục)
 - [Hướng dẫn cài đặt](#-hướng-dẫn-cài-đặt)
 - [Hướng dẫn sử dụng](#-hướng-dẫn-sử-dụng)
@@ -17,36 +17,14 @@
 
 ---
 
-## 🎯 Giới thiệu
+## 📝 Giới thiệu
+Dự án tập trung vào việc tự động hóa quy trình check-in/check-out tại các bãi giữ xe sử dụng công nghệ nhận diện biển số (LPR). Hệ thống tự động ghi nhận thời gian, quản lý danh sách xe trong bãi và tính toán chi phí gửi xe, giúp giảm thiểu sai sót thủ công và tăng tốc độ xử lý.
 
-Dự án **LPR (License Plate Recognition)** là một hệ thống nhận diện biển số xe tích hợp các công nghệ **Deep Learning** và **Computer Vision** tiên tiến:
-
-- **YOLO v8/v11**: Phát hiện vị trí biển số trong ảnh/video
-- **OpenCV**: Xử lý ảnh và làm rõ ký tự
-- **EasyOCR/PaddleOCR**: Nhận dạng ký tự từ biển số
-- **Streamlit**: Giao diện web thân thiện người dùng
-
-Hệ thống được thiết kế để nhận diện **biển số xe Việt Nam** với độ chính xác cao, hỗ trợ các điều kiện ánh sáng khác nhau và xử lý real-time.
-
----
-
-## ✨ Tính năng
-
-- ✅ **Phát hiện biển số**: Sử dụng YOLO để xác định vị trí biển số với bounding box chính xác
-- ✅ **Xử lý ảnh thông minh**: 
-  - Chuyển đổi Grayscale, tăng độ tương phản (CLAHE)
-  - Thresholding nhị phân hóa
-  - Giảm nhiễu và làm rõ ký tự
-  - Căn chỉnh góc (Deskewing) nếu cần
-- ✅ **Nhận dạng ký tự**: OCR với hỗ trợ tiếng Việt
-- ✅ **Hậu xử lý thông minh**: 
-  - Kiểm tra định dạng biển số Việt Nam
-  - Sửa lỗi phổ biến bằng Regular Expression
-  - Xử lý biển số dài (1 dòng) và vuông (2 dòng)
-- ✅ **Giao diện web**: Upload ảnh/video và xem kết quả trực quan
-- ✅ **Xử lý video**: Hỗ trợ nhận diện từ file video hoặc camera
-
----
+## 🚀 Tính năng chính
+- **Tự động Check-in:** Nhận diện biển số, lưu thời gian vào và cấp mã vé điện tử vào Database.
+- **Tự động Check-out:** Quét lại biển số khi xe ra, tự động đối soát thời gian và tính toán tiền phí.
+- **Quản lý Dữ liệu:** Lưu trữ lịch sử gửi xe bằng SQLite.
+- **Giao diện Giám sát:** Dashboard trực quan bằng Streamlit cho phép xem video real-time và thống kê doanh thu.
 
 ## 🛠️ Công nghệ sử dụng
 
@@ -59,6 +37,7 @@ Hệ thống được thiết kế để nhận diện **biển số xe Việt N
 | **EasyOCR** | Nhận dạng ký tự (OCR) |
 | **Streamlit** | Giao diện web |
 | **NumPy** | Xử lý dữ liệu mảng |
+| **SQLite3** | Quản lý Cơ sở dữ liệu (Log xe ra vào) |
 
 ### Công cụ & Nền tảng
 - **Ngôn ngữ**: Python 3.9+
@@ -74,6 +53,7 @@ Hệ thống được thiết kế để nhận diện **biển số xe Việt N
 ```
 LPR_Project/
 ├── app.py                          # Ứng dụng Streamlit chính
+├── parking.db                      # File Database SQLite3 (tự sinh)
 ├── requirements.txt                # Danh sách thư viện Python
 ├── README.md                       # Tài liệu này
 ├── LPR_Project_Roadmap.md         # Kế hoạch phát triển chi tiết
@@ -86,6 +66,7 @@ LPR_Project/
 │   └── .gitkeep                   
 │
 └── modules/                        # Các module xử lý chính
+    ├── database_manager.py        # Logic quản lý DB (Check-in/Out)
     ├── detection.py               # Module phát hiện biển số (YOLO)
     ├── processing.py              # Module xử lý ảnh (OpenCV)
     └── ocr_engine.py              # Module nhận dạng ký tự (OCR)

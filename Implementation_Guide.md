@@ -1,4 +1,4 @@
-# 🛠️ Hướng dẫn chi tiết các bước triển khai Dự án LPR
+# 🛠️ Hướng dẫn Triển khai Kỹ thuật (Smart Parking)
 
 Tài liệu này cung cấp hướng dẫn cài đặt và các đoạn code/cấu trúc cơ bản cho từng thành viên để dễ dàng bắt đầu lập trình.
 
@@ -137,64 +137,79 @@ def read_and_format_plate(processed_img):
 
 ---
 
-## 🔵 Bước 4: Tích hợp Pipeline & Giao diện Streamlit (Dành cho Bạn / Tui)
-Tạo file `app.py`:
+## 🔵 Bước 4: Tích hợp Database & Giao diện Dashboard (Smart Parking)
+Tạo file `database_manager.py` trong thư mục `modules/` để xử lý SQLite:
+```python
+import sqlite3
+import datetime
+
+def init_db():
+    conn = sqlite3.connect('parking.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS parking_logs
+                 (ticket_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  plate_number TEXT, time_in DATETIME, 
+                  time_out DATETIME, status TEXT, fee REAL)''')
+    conn.commit()
+    return conn
+
+def process_vehicle(plate_number):
+    conn = sqlite3.connect('parking.db')
+    c = conn.cursor()
+    # Kiểm tra xem xe đang ở trong bãi không
+    c.execute("SELECT * FROM parking_logs WHERE plate_number=? AND status='IN'", (plate_number,))
+    record = c.fetchone()
+    
+    now = datetime.datetime.now()
+    if record is None:
+        # CHECK-IN
+        c.execute("INSERT INTO parking_logs (plate_number, time_in, status) VALUES (?, ?, 'IN')", (plate_number, now))
+        conn.commit()
+        return "CHECK-IN", now.strftime("%H:%M:%S"), 0
+    else:
+        # CHECK-OUT
+        ticket_id = record[0]
+        time_in = datetime.datetime.strptime(record[2], "%Y-%m-%d %H:%M:%S.%f")
+        hours_parked = (now - time_in).total_seconds() / 3600
+        fee = max(5000, int(hours_parked * 10000)) # Logic tính tiền cơ bản
+        
+        c.execute("UPDATE parking_logs SET time_out=?, status='OUT', fee=? WHERE ticket_id=?", (now, fee, ticket_id))
+        conn.commit()
+        return "CHECK-OUT", now.strftime("%H:%M:%S"), fee
+```
+
+Tạo file `app.py` tích hợp giao diện:
 ```python
 import streamlit as st
 import cv2
-import numpy as np
-from ultralytics import YOLO
+from modules.database_manager import init_db, process_vehicle
 
-# Import hàm từ các module của TV3 và TV4 (sau khi đã có code từ họ)
-# from image_processing import process_license_plate
-# from ocr_processing import read_and_format_plate
+# Khởi tạo DB
+init_db()
 
-st.set_page_config(page_title="Nhận diện Biển số xe", page_icon="🚗")
-st.title("🚗 Hệ thống nhận diện biển số xe (LPR)")
+st.set_page_config(page_title="Smart Parking Dashboard", layout="wide")
+st.title("🅿️ Hệ thống Quản lý Bãi xe Thông minh")
 
-# Load mô hình do TV2 train
-try:
-    model = YOLO('best.pt')
-except:
-    st.warning("Chưa có file mô hình 'best.pt'.")
+col1, col2 = st.columns([2, 1])
 
-uploaded_file = st.file_uploader("Tải lên ảnh chứa xe/biển số", type=["jpg", "png", "jpeg"])
+with col1:
+    st.subheader("📷 Camera Gate")
+    uploaded_file = st.file_uploader("Upload ảnh xe qua trạm", type=["jpg", "png"])
+    if uploaded_file:
+        # TODO: Chạy qua pipeline YOLO -> OpenCV -> OCR để lấy text
+        # Mock Data (thay thế bằng kết quả thật)
+        detected_plate = "30G12345" 
+        st.success(f"🔍 Hệ thống AI nhận diện biển số: **{detected_plate}**")
 
-if uploaded_file is not None:
-    # Chuyển đổi file upload sang numpy array cho OpenCV
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1)
-    
-    # Chia cột hiển thị
-    col1, col2 = st.columns(2)
-    with col1:
-        st.image(image, channels="BGR", caption="Ảnh gốc")
-    
-    if st.button("Nhận diện", type="primary"):
-        # --- BƯỚC 1: YOLO DETECT ---
-        results = model(image)
-        boxes = results[0].boxes.xyxy.cpu().numpy()
-        
-        if len(boxes) > 0:
-            bbox = boxes[0] # Lấy biển số đầu tiên tìm thấy
-            
-            # --- BƯỚC 2: OPENCV ---
-            # processed_img = process_license_plate(image, bbox)
-            
-            # --- BƯỚC 3: OCR ---
-            # text_result = read_and_format_plate(processed_img)
-            
-            # Mock Data (thay bằng text_result khi có code thật)
-            text_result = "TEST-30G12345" 
-            
-            st.success(f"**Biển số:** {text_result}")
-            
-            # Vẽ Bounding Box lên ảnh hiển thị
-            cv2.rectangle(image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0, 255, 0), 3)
-            with col2:
-                st.image(image, channels="BGR", caption="Ảnh Kết quả")
-        else:
-            st.error("Không tìm thấy biển số nào trong ảnh!")
+        with col2:
+            st.subheader("💳 Cổng Thanh Toán")
+            if st.button("Xác nhận & Mở cổng"):
+                action, time_str, fee = process_vehicle(detected_plate)
+                if action == "CHECK-IN":
+                    st.info(f"✅ Đã Check-in lúc {time_str}")
+                else:
+                    st.warning(f"📤 Đã Check-out lúc {time_str}")
+                    st.error(f"💰 Phí gửi xe: {fee:,.0f} VNĐ")
 ```
 Để chạy thử giao diện, bạn gõ lệnh trên terminal:
 ```bash
@@ -205,45 +220,50 @@ streamlit run app.py
 
 ## 📁 Bước 5: Cấu trúc Thư mục Chuẩn của Dự án
 
-Toàn bộ dự án cần được tổ chức theo cấu trúc sau để các thành viên dễ tích hợp:
+Toàn bộ dự án cần được tổ chức theo cấu trúc sau để các thành viên dễ phân công:
 
 ```
 LPR_Project/
+├── parking.db                # File Database tự động tạo (cần đưa vào .gitignore)
 ├── models/
-│   └── best.pt               # Sản phẩm của Thành viên 2 (YOLO model đã train)
+│   └── best.pt               # Sản phẩm của TV2 (YOLO model)
 ├── modules/
-│   ├── detection.py          # Logic nhận diện biển số (gọi YOLO, trả về bbox)
-│   ├── processing.py         # Sản phẩm của Thành viên 3 (OpenCV pipeline)
-│   └── ocr_engine.py         # Sản phẩm của Thành viên 4 (EasyOCR + RegEx)
-├── app.py                    # File chính — Sản phẩm của Nhóm trưởng (UI & Pipeline)
-├── requirements.txt          # Danh sách thư viện cần cài đặt
-└── Implementation_Guide.md   # File hướng dẫn này
+│   ├── database_manager.py   # Xử lý kết nối và truy vấn SQLite3
+│   ├── detection.py          # Module phát hiện biển số (YOLO)
+│   ├── processing.py         # Sản phẩm TV3 (OpenCV pipeline)
+│   └── ocr_engine.py         # Sản phẩm TV4 (EasyOCR + RegEx)
+├── app.py                    # File chính — UI Streamlit và ghép nối luồng
+├── requirements.txt          
+└── Implementation_Guide.md   
 ```
 
-> **Lưu ý:** `app.py` chỉ import và gọi hàm từ các module — không chứa logic xử lý ảnh hay OCR trực tiếp bên trong.
+> **Quy tắc:** Mọi tương tác lưu/đọc dữ liệu gửi xe phải thông qua file `modules/database_manager.py`. `app.py` chỉ phụ trách UI và điều phối.
 
 ---
 
-## 🚉 Bước 6: Hiểu rõ Workflow — 5 Trạm xử lý
+## 🚉 Bước 6: Cấu trúc Cơ sở dữ liệu & Logic Xử lý (Smart Parking)
 
-```
-[Trạm 1] Người dùng upload ảnh/video (Streamlit UI)
-     ↓
-[Trạm 2] YOLOv8n quét ảnh → trả về tọa độ bbox biển số
-     ↓
-[Trạm 3] OpenCV: Crop → Grayscale → CLAHE → Blur → Binarize (Nhị phân hóa)
-     ↓
-[Trạm 4] EasyOCR đọc ảnh nhị phân → chuỗi ký tự thô (raw text)
-     ↓
-[Trạm 5] RegEx làm sạch & định dạng → Hiển thị kết quả lên UI
-```
+### 1. Cấu trúc Cơ sở dữ liệu (SQLite)
+Bảng `parking_logs`:
+- `ticket_id` (TEXT): Mã vé tự động.
+- `plate_number` (TEXT): Biển số xe.
+- `time_in` (DATETIME): Giờ vào.
+- `time_out` (DATETIME): Giờ ra.
+- `status` (TEXT): 'IN' hoặc 'OUT'.
+- `fee` (REAL): Số tiền.
 
-**Ví dụ luồng dữ liệu thực tế:**
-- Đầu vào: Ảnh xe với biển số `30G-123.45`
-- Trạm 2 → bbox: `[145, 320, 410, 390]`
-- Trạm 3 → ảnh trắng đen biển số đã cắt
-- Trạm 4 → raw text: `"30G-123.45#"`
-- Trạm 5 → kết quả cuối: `"30G12345"` ✅
+### 2. Quy trình xử lý (Pipeline)
+1. **Detection:** YOLO bắt biển số từ Video Stream.
+2. **Preprocessing:** OpenCV cắt vùng biển, xử lý nhị phân.
+3. **OCR:** Chuyển ảnh vùng biển thành chuỗi String.
+4. **Logic Decision:**
+   - Nếu biển số KHÔNG tồn tại trong DB với status 'IN' -> Thực hiện **Check-in**.
+   - Nếu biển số ĐÃ tồn tại với status 'IN' -> Thực hiện **Check-out** (Tính tiền = Giờ ra - Giờ vào).
+5. **UI:** Hiển thị thông báo lên màn hình Streamlit (Thành công/Thất bại/Số tiền).
+
+### 3. Lưu ý kỹ thuật
+- Sử dụng `cv2.VideoCapture(0)` cho webcam hoặc đường dẫn file video.
+- Chỉnh `clipLimit` trong CLAHE nếu ảnh biển số quá chói đèn LED.
 
 ---
 
@@ -262,28 +282,31 @@ model = YOLO('yolov8n.pt')  # Nano — nhẹ nhất
 model.train(data='vietnamese_plates/data.yaml', epochs=50, imgsz=640)
 ```
 
-### 🟠 Vấn đề 2: Giảm Delay khi xử lý Video
+### 🟠 Vấn đề 2: Chống Spam Scan (Chỉ check-in 1 lần)
+
+Khi áp dụng vào Camera bãi xe, một chiếc xe dừng ở cổng có thể bị scan hàng chục lần.
 
 ```python
-frame_count = 0
-SKIP_FRAMES = 5  # OCR chỉ chạy mỗi 5 frame
-plate_buffer = []  # Buffer lưu kết quả tạm
+import time
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    frame_count += 1
+recent_scans = {} # Lưu {biển_số: thời_gian_scan_cuối}
+COOLDOWN_TIME = 60 # Chỉ xử lý 1 lần trong 60 giây
 
-    # YOLO chạy mỗi frame (nhanh)
-    results = yolo_model(frame)
-
-    # OCR chỉ chạy mỗi SKIP_FRAMES (nặng hơn)
-    if frame_count % SKIP_FRAMES == 0 and len(results[0].boxes) > 0:
-        text = ocr_engine.read(frame, results[0].boxes[0])
-        plate_buffer.append(text)
-
-        # Chỉ lưu khi ổn định 3 frame liên tiếp
-        if len(plate_buffer) >= 3 and len(set(plate_buffer[-3:])) == 1:
-            save_to_csv(plate_buffer[-1])  # Lưu kết quả chắc chắn
+def handle_frame(frame):
+    plate_text = ai_pipeline.scan(frame)
+    if not plate_text: return
+    
+    current_time = time.time()
+    
+    # Kiểm tra Cooldown để chống Spam
+    if plate_text in recent_scans:
+        if current_time - recent_scans[plate_text] < COOLDOWN_TIME:
+            return # Bỏ qua, tránh gọi Check-in/Check-out liên tục
+            
+    recent_scans[plate_text] = current_time
+    
+    # Tiến hành xử lý DB (Check-in/Check-out)
+    database.process_vehicle(plate_text)
 ```
 
 ### 🟢 Vấn đề 3: Plan B nếu Real-time quá chậm
