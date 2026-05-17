@@ -1,12 +1,12 @@
 import cv2
 import os
 
-from detection import detect_license_plate  # Trạm 2
-from processing import process_plate        # Trạm 3
-from ocr_engine import PlateOCR             # Trạm 4
+from detection import detect_license_plate
+from processing import process_plate
+from ocr_engine import PlateOCR
 
 def test_single_image(image_path):
-    # 1. Đọc ảnh gốc
+    # Đọc ảnh gốc
     img = cv2.imread(image_path)
     if img is None:
         print(f"Lỗi: Không thể tìm thấy ảnh tại {image_path}")
@@ -14,11 +14,11 @@ def test_single_image(image_path):
 
     print(f"\nĐANG XỬ LÝ ẢNH: {image_path}")
 
-    # 2. Khởi tạo AI Đọc chữ
+    # Khởi tạo AI Đọc chữ
     print("Đang tải mô hình OCR...")
     ocr_reader = PlateOCR(gpu=False)
 
-    # 3. YOLO quét tìm vị trí biển số
+    # YOLO quét tìm vị trí biển số
     print("YOLO đang tìm biển số...")
     bbox = detect_license_plate(img)
 
@@ -26,7 +26,7 @@ def test_single_image(image_path):
         x1, y1, x2, y2 = map(int, bbox)
         print(f"YOLO khoanh vùng thành công tại: [{x1}, {y1}, {x2}, {y2}]")
 
-        # 4. OpenCV cắt và xử lý làm rõ nét
+        # OpenCV cắt và xử lý làm rõ nét
         print("OpenCV đang nhị phân hóa ảnh...")
         processed_img = process_plate(img, bbox)
         
@@ -34,7 +34,7 @@ def test_single_image(image_path):
             # Hiện ảnh trắng đen lên xem trước
             cv2.imshow("1. Anh Trang Den (Ban giao cho OCR)", processed_img)
 
-            # 5. OCR tiến hành đọc chữ
+            # OCR tiến hành đọc chữ
             print("OCR đang giải mã ký tự...")
             text_result = ocr_reader.read_plate(processed_img)
 
@@ -64,7 +64,7 @@ def test_single_image(image_path):
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
-    image_name = "test9.jpg" 
+    image_name = "test13.jpg" 
     
     test_image_path = os.path.join(current_dir, image_name)
     test_single_image(test_image_path)
