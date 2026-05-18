@@ -2,6 +2,8 @@ import streamlit as st
 import datetime
 import random
 
+# streamlit run app.py
+
 # -----------------------------------------------------------------------
 # CẤU HÌNH TRANG
 # -----------------------------------------------------------------------

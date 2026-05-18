@@ -19,16 +19,16 @@ def init_db():
        - fee (Số thực: Phí gửi xe)
     4. Ghi nhận thay đổi (commit) và trả về đối tượng connection.
     """
-    # 1. Kết nối tới database
+    # Kết nối tới database
     conn = sqlite3.connect(DB_PATH)
     
-    # 2. Khởi tạo cursor
+    # Khởi tạo cursor
     cursor = conn.cursor()
     
-    # 3. Tạo bảng parking_logs nếu chưa tồn tại
+    # Tạo bảng parking_logs nếu chưa tồn tại
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS parking_logs (
-            ticket_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER PRIMARY KEY AUTOINCREMENT, 
             plate_number TEXT NOT NULL,
             time_in TIMESTAMP NOT NULL,
             time_out TIMESTAMP,
@@ -37,7 +37,7 @@ def init_db():
         )
     ''')
     
-    # 4. Ghi nhận thay đổi và trả về connection
+    # Ghi nhận thay đổi và trả về connection
     conn.commit()
     return conn
 
@@ -60,7 +60,7 @@ def process_vehicle(plate_number):
        - Cập nhật bản ghi: Thêm time_out, fee, đổi status='OUT'.
        - Trả về kết quả: "CHECK-OUT", chuỗi định dạng thời gian, số tiền phí.
     """
-    # 1. Kết nối database
+    # Kết nối database
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -73,7 +73,7 @@ def process_vehicle(plate_number):
     
     current_time = datetime.datetime.now()
     
-    # 2. KIỂM TRA: Nếu KHÔNG có bản ghi (Xe đang vào)
+    # Nếu KHÔNG có bản ghi (Xe đang vào)
     if result is None:
         # Thực hiện CHECK-IN
         cursor.execute(
@@ -89,7 +89,7 @@ def process_vehicle(plate_number):
             "fee": 0
         }
     
-    # 3. KIỂM TRA: Nếu ĐÃ CÓ bản ghi (Xe đang ra)
+    # Nếu ĐÃ CÓ bản ghi (Xe đang ra)
     else:
         ticket_id, time_in_str = result
         
@@ -98,11 +98,25 @@ def process_vehicle(plate_number):
         
         # Tính thời gian đã đỗ (giờ)
         duration = current_time - time_in
-        hours = max(1, int(duration.total_seconds() / 3600))  # Tối thiểu 1 giờ
-        
-        # Tính phí (ví dụ: 5.000 VND/giờ cho ô tô, 2.000 VND/giờ cho xe máy)
-        # Ở đây mặc định 5.000 VND/giờ
-        fee = hours * 5000
+        total_minutes = int(duration.total_seconds() / 60)
+
+        # Lấy phần nguyên là số giờ trọn ven, phần dư là số phút lẻ
+        full_hours = total_minutes // 60
+        remaning_minites = total_minutes % 60
+
+        # Tính phí gửi xe
+        fee = 0
+        if total_minutes <= 30:
+            fee = 5000
+        elif total_minutes < 60:
+            fee = 8000
+        else:
+            fee = full_hours * 10000
+            # Tính tiền cho số phút lẻ (nếu có)
+            if 0 < remaning_minites <= 30:
+                fee += 5000
+            elif remaning_minites > 30:
+                fee += 8000
         
         # Cập nhật bản ghi: Thêm time_out, fee, đổi status='OUT'
         cursor.execute(
@@ -116,5 +130,13 @@ def process_vehicle(plate_number):
             "status": "CHECK-OUT",
             "time": current_time.strftime("%H:%M:%S"),
             "fee": fee,
-            "hours": hours
+            "hours": full_hours,
+            "minutes": remaning_minites,
+            "total_minutes": total_minutes
         }
+
+if __name__ == "__main__":
+    conn = init_db()
+    conn.close()
+    print(f"Database đã được khởi tạo thành công!")
+    print(f"File: {os.path.abspath(DB_PATH)}")

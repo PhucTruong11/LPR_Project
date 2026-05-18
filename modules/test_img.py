@@ -31,8 +31,8 @@ def test_single_image(image_path):
         processed_img = process_plate(img, bbox)
         
         if processed_img is not None and processed_img.size > 0:
-            # Hiện ảnh trắng đen lên xem trước
-            cv2.imshow("1. Anh Trang Den (Ban giao cho OCR)", processed_img)
+            # Hiện ảnh đã cắt bởi openCV
+            cv2.imshow("1. Anh da cat (Ban giao cho OCR)", processed_img)
 
             # OCR tiến hành đọc chữ
             print("OCR đang giải mã ký tự...")
@@ -48,7 +48,7 @@ def test_single_image(image_path):
                 bg_y1 = y1 - 35 if y1 > 35 else y2
                 bg_y2 = y1 if y1 > 35 else y2 + 35
 
-                cv2.rectangle(img, (x1, bg_y1), (x1 + 150, bg_y2), (0, 0, 0), -1)
+                # cv2.rectangle(img, (x1, bg_y1), (x1 + 150, bg_y2), (0, 0, 0), -1)
                 cv2.putText(img, text_result, (x1 + 5, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             else:
                 print("OCR bó tay, không đọc được ký tự nào!")
@@ -64,7 +64,7 @@ def test_single_image(image_path):
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
-    image_name = "test13.jpg" 
+    image_name = "test4.webp" 
     
     test_image_path = os.path.join(current_dir, image_name)
     test_single_image(test_image_path)
