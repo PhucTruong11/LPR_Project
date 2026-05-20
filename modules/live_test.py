@@ -74,11 +74,11 @@ def run_live_camera(video_source=0):
     miss_count    = 0
     last_text     = ""
     last_ocr_time = 0.0
-    OCR_COOLDOWN  = 1.0   # Giây — cooldown giữa 2 lần OCR
+    OCR_COOLDOWN  = 0.5   # Giây — cooldown giữa 2 lần OCR 1.0
 
     # Theo dõi vị trí bbox để phát hiện biển số mới
     prev_bbox_center   = None
-    BBOX_JUMP_THRESHOLD = 60  # pixel — dịch chuyển > ngưỡng này = biển mới
+    BBOX_JUMP_THRESHOLD = 35  # pixel — dịch chuyển > ngưỡng này = biển mới 50
 
     # Cache kích thước frame để tránh tính lại
     scale = src_w = src_h = None
@@ -110,6 +110,13 @@ def run_live_camera(video_source=0):
                     int(sx2 / scale), int(sy2 / scale)
                 ]
 
+                # Nếu đã có kết quả, cứ mỗi 2s verify lại để phát hiện xe mới
+                now = time.time()
+                if last_text and (now - last_ocr_time) >= 2.0:
+                    last_text = ""
+                    last_ocr_time = 0.0   # ép OCR chạy lại ngay
+                last_bbox = new_bbox
+
                 # --- Phát hiện biển số mới dựa vào bbox jump ---
                 new_cx = (new_bbox[0] + new_bbox[2]) / 2
                 new_cy = (new_bbox[1] + new_bbox[3]) / 2
@@ -132,7 +139,7 @@ def run_live_camera(video_source=0):
                 last_bbox = new_bbox
             else:
                 miss_count += 1
-                if miss_count > 3:
+                if miss_count > 2: # miss_count > 3
                     last_bbox        = None
                     last_text        = ""
                     prev_bbox_center = None
@@ -141,6 +148,10 @@ def run_live_camera(video_source=0):
         try:
             new_text = result_q.get_nowait()
             if new_text:
+                # last_text = new_text
+                if new_text != last_text:   # xe mới!
+                    print(f"[NEW CAR] {last_text} → {new_text}")
+                    # TODO: ghi vào database bãi đỗ xe ở đây
                 last_text = new_text
         except Exception:
             pass   # Chưa có kết quả mới → dùng last_text cũ
