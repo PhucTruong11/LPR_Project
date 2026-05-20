@@ -35,7 +35,7 @@ class PlateOCR:
         """
         print("Đang khởi tạo PaddleOCR (lần đầu có thể mất vài giây để tải mô hình)...")
         # Nhận diện biển số xe chỉ cần ký tự tiếng Anh/Số -> Dùng lang='en' để tăng tốc và giảm dung lượng
-        self.reader = POCR(use_angle_cls=False, lang='en', enable_mkldnn=False,cpu_threads=2)
+        self.reader = POCR(use_angle_cls=False, lang='en', enable_mkldnn=False, cpu_threads=6)
         print("PaddleOCR đã sẵn sàng!")
 
     def read_plate(self, image):
