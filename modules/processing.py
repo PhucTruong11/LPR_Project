@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import os
 
-from detection import detect_license_plate
+from modules.detection import detect_license_plate
 
 # def process_plate(image, bbox):
 #     # 1. Cắt ảnh (Crop)
