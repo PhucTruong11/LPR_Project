@@ -278,12 +278,12 @@ class PlateOCR:
         try:
             from paddleocr import PaddleOCR as _POCR  # type: ignore
             self._reader = _POCR(
-                use_angle_cls=False,
+                # use_angle_cls=False,
                 lang="en",
-                use_gpu=gpu,
-                enable_mkldnn=False,
-                cpu_threads=6,
-                show_log=False,      # tắt log rác của PaddleOCR
+                # use_gpu=False,
+                # enable_mkldnn=False,
+                # cpu_threads=6,
+                # show_log=False,      # tắt log rác của PaddleOCR
             )
             log.info("[OCR] PaddleOCR đã sẵn sàng (gpu=%s).", gpu)
         except ImportError:
@@ -357,6 +357,12 @@ class PlateOCR:
         except Exception as exc:
             log.error("[OCR] Lỗi không xử lý được: %s", exc)
             return ""
+
+    #     """
+    # Tạm thời fake OCR để test backend.
+    # """
+
+    #     return "59A12345"
  
     # Alias tương thích ngược với code cũ dùng process_ocr()
     def process_ocr(self, image) -> str:

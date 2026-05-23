@@ -1,6 +1,23 @@
 import streamlit as st
 import datetime
 import random
+import cv2
+import numpy as np
+from modules.database_manager import process_vehicle
+from PIL import Image
+
+# Import các module backend thật của bạn
+from modules.detection import detect_license_plate
+from modules.processing import process_plate
+from modules.ocr_engine import PlateOCR
+from modules.database_manager import process_vehicle, get_status
+
+# Khởi tạo mô hình OCR một lần duy nhất (tránh lag giao diện khi upload nhiều ảnh)
+@st.cache_resource
+def load_ocr_model():
+    return PlateOCR(gpu=False)
+
+ocr_reader = load_ocr_model()
 
 # streamlit run app.py
 
@@ -180,6 +197,47 @@ with col_center:
                     st.error("Không tìm thấy xe trong bãi!")
             else:
                 st.warning("Vui lòng nhập biển số!")
+
+# with col_center:
+#     st.subheader("Màn hình nhận diện")
+    
+#     # Đổi từ Camera sang Upload File để bạn có thể test trực tiếp bằng Dataset
+#     img_buffer = st.file_uploader("Tải ảnh biển số từ dataset", type=["jpg", "png", "jpeg"])
+
+#     if img_buffer:
+#         # 1. Đọc và hiển thị ảnh gốc
+#         image = Image.open(img_buffer)
+#         st.image(image, caption="Ảnh Camera Đầu Vào", use_column_width=True)
+        
+#         # Chuyển đổi định dạng ảnh cho OpenCV
+#         img_array = np.array(image)
+#         img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+
+#         with st.spinner('Hệ thống AI đang phân tích...'):
+#             # 2. YOLO Khoanh vùng
+#             bbox = detect_license_plate(img_bgr)
+            
+#             if bbox is not None:
+#                 # 3. OpenCV Tiền xử lý
+#                 processed_img = process_plate(img_bgr, bbox)
+                
+#                 if processed_img is not None:
+#                     # 4. PaddleOCR Đọc chữ
+#                     detected = ocr_reader.read_plate(processed_img)
+                    
+#                     if detected:
+#                         st.session_state.last_scanned = detected
+#                         st.success(f"✅ Nhận diện thành công: **{detected}**")
+#                     else:
+#                         st.error("❌ OCR không giải mã được ký tự!")
+#                 else:
+#                     st.error("❌ Lỗi tiền xử lý ảnh (OpenCV)!")
+#             else:
+#                 st.error("❌ YOLO không tìm thấy biển số trong ảnh!")
+#     else:
+#         st.warning("Đang đợi hình ảnh...")
+
+#     st.divider()
 
 # ══════════════════════════════════════════════════════════════════════
 # CỘT PHẢI – THÔNG TIN CHI TIẾT
