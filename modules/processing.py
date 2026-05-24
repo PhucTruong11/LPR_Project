@@ -79,7 +79,6 @@ from detection import detect_license_plate
 
 
 def process_plate(image, bbox):
-    # Cắt ảnh (Crop)
     h_img, w_img = image.shape[:2]
     x_min, y_min, x_max, y_max = map(int, bbox)
 
@@ -91,7 +90,6 @@ def process_plate(image, bbox):
     if plate_crop.size == 0:
         return None
 
-    # Ép mọi biển số về cùng chiều cao 200px
     h_crop, w_crop = plate_crop.shape[:2]
     ratio = 200.0 / float(h_crop)
     plate_crop = cv2.resize(plate_crop, (int(w_crop * ratio), 200), interpolation=cv2.INTER_CUBIC)

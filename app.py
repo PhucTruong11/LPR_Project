@@ -1,31 +1,41 @@
 import streamlit as st
 import datetime
-import random 
-import io
-
+import sys
+import os
+import cv2
+import numpy as np
+from PIL import Image
 # streamlit run app.py
 
-# -----------------------------------------------------------------------
+
+
+# PATH SETUP — đảm bảo import được modules/
+MODULES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "modules")
+if MODULES_DIR not in sys.path:
+    sys.path.insert(0, MODULES_DIR)
+
+import modules.database_manager as db
+from modules.config import AUTO_REFRESH_SEC, HISTORY_DISPLAY_LIMIT
+
+from modules.detection import detect_license_plate
+from modules.processing import process_plate
+from modules.ocr_engine import PlateOCR
+
+
 # CẤU HÌNH TRANG
-# -----------------------------------------------------------------------
 st.set_page_config(
     page_title="Hệ thống Nhận diện Biển số xe",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# -----------------------------------------------------------------------
 # CSS TỐI ƯU GIAO DIỆN
-# -----------------------------------------------------------------------
 st.markdown("""
 <style>
 .block-container { padding-top: 0.6rem !important; padding-bottom: 0.6rem !important; max-width: 100% !important; }
 div[data-testid="stVerticalBlock"] > div { padding-bottom: 0rem !important; }
-
-/* Đẩy tiêu đề xuống một chút để không bị che khuất bởi thanh công cụ Streamlit */
 h1 { margin-top: 2rem !important; margin-bottom: 0.5rem !important; padding-top: 0 !important; text-align: center; }
 h2, h3 { margin-top: 0 !important; margin-bottom: 0.2rem !important; padding-top: 0 !important; }
-
 .stTabs [data-baseweb="tab-list"] { gap: 4px; }
 .stTabs [data-baseweb="tab"] { padding: 4px 10px; font-weight: bold; }
 hr { margin: 0.4rem 0 !important; }
@@ -33,229 +43,322 @@ div[data-testid="stFormSubmitButton"] > button, .stButton > button { margin-top:
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------
+@st.cache_resource
+def get_db_initialized():
+    """Khởi tạo DB một lần duy nhất suốt vòng đời app."""
+    conn = db.init_db()
+    conn.close()
+    return True
+
+get_db_initialized()
+
+@st.cache_resource
+def get_ocr_engine():
+    """Khởi tạo mô hình OCR một lần duy nhất."""
+    return PlateOCR()
+
+ocr_engine = get_ocr_engine()
+
 # SESSION STATE
-# -----------------------------------------------------------------------
-if "parking_lot" not in st.session_state:
-    st.session_state.parking_lot = [
-        {"plate": "29A-111.11", "time_in": "08:00:15", "date_in": "21/05/2026", "slot": "A01"},
-        {"plate": "30K-999.99", "time_in": "08:15:30", "date_in": "21/05/2026", "slot": "B03"},
-        {"plate": "15C-456.78", "time_in": "08:45:00", "date_in": "21/05/2026", "slot": "A02"},
-        {"plate": "51B-888.88", "time_in": "09:10:22", "date_in": "21/05/2026", "slot": "B01"},
-    ]
-
-if "history" not in st.session_state:
-    st.session_state.history = [
-        {"plate": "30A-123.45", "date_in": "21/05/2026", "time_in": "07:15:02",
-         "date_out": "21/05/2026", "time_out": "09:15:02", "fee": "4.000đ"},
-        {"plate": "51F-999.99", "date_in": "21/05/2026", "time_in": "08:20:45",
-         "date_out": "21/05/2026", "time_out": "10:20:45", "fee": "20.000đ"},
-        {"plate": "29C-321.00", "date_in": "21/05/2026", "time_in": "06:00:00",
-         "date_out": "21/05/2026", "time_out": "11:00:00", "fee": "10.000đ"},
-    ]
-
-if "last_scanned"      not in st.session_state: st.session_state.last_scanned      = None
 if "last_action"       not in st.session_state: st.session_state.last_action        = None
 if "last_action_plate" not in st.session_state: st.session_state.last_action_plate  = ""
 if "last_action_fee"   not in st.session_state: st.session_state.last_action_fee    = ""
 if "last_action_slot"  not in st.session_state: st.session_state.last_action_slot   = ""
-if "fee_per_hour"      not in st.session_state: st.session_state.fee_per_hour       = 2000
-if "capacity"          not in st.session_state: st.session_state.capacity           = 30
+if "last_scanned"      not in st.session_state: st.session_state.last_scanned       = None
+if "last_out_info"     not in st.session_state: st.session_state.last_out_info      = {}
 
-# Tính toán dữ liệu chung
-capacity = st.session_state.capacity
-lot      = st.session_state.parking_lot
+# ĐỌC DỮ LIỆU THỰC TỪ DATABASE
+status_data  = db.get_status()
+recent_logs  = db.get_recent_logs(limit=HISTORY_DISPLAY_LIMIT)
+revenue_data = db.get_revenue_today()
 
-def parse_fee(fee_str):
+# SEMI-MANUAL: đọc biển số camera vừa phát hiện (nếu có)
+camera_detected = db.get_detected_plate()
+
+capacity    = status_data["max_capacity"]
+occupancy   = status_data["occupancy"]
+vehicles_in = status_data["vehicles_inside"]  # list[dict]: ticket_id, plate_number, time_in
+
+
+def fmt_time(raw: str) -> str:
+    """Lấy HH:MM:SS từ chuỗi ISO timestamp."""
     try:
-        return int(fee_str.replace("đ", "").replace(".", "").replace(",", ""))
+        return raw[11:19]
     except Exception:
-        return 0
+        return raw or "--:--:--"
 
-total_revenue = sum(parse_fee(h["fee"]) for h in st.session_state.history)
+def fmt_date(raw: str) -> str:
+    """Lấy dd/mm/yyyy từ chuỗi ISO timestamp."""
+    try:
+        dt = datetime.datetime.fromisoformat(raw)
+        return dt.strftime("%d/%m/%Y")
+    except Exception:
+        return raw or "--/--/----"
 
-# -----------------------------------------------------------------------
-# TIÊU ĐỀ CHÍNH
-# -----------------------------------------------------------------------
+
 st.markdown("<h1>Hệ thống bãi đỗ xe</h1>", unsafe_allow_html=True)
 st.divider()
 
-# -----------------------------------------------------------------------
-# BỐ CỤC CHÍNH (Khoảng cách cột rộng rãi: gap="large")
-# -----------------------------------------------------------------------
+# BỐ CỤC CHÍNH
 col_left, col_center, col_right = st.columns([1.2, 1.6, 1.2], gap="large")
 
-# ══════════════════════════════════════════════════════════════════════
-# CỘT TRÁI – TAB: XE TRONG BÃI & LỊCH SỬ HỆ THỐNG
-# ══════════════════════════════════════════════════════════════════════
+# CỘT TRÁI – XE TRONG BÃI & LỊCH SỬ
 with col_left:
-    tab_current, tab_hist = st.tabs([f"Xe trong bãi ({len(lot)})", "Lịch sử hệ thống"])
-    
+    tab_current, tab_hist = st.tabs([f"Xe trong bãi ({occupancy})", "Lịch sử hệ thống"])
+
     # --- TAB 1: XE ĐANG TRONG BÃI ---
     with tab_current:
         search_in = st.text_input("Tìm xe:", placeholder="Nhập biển số...", key="search_in", label_visibility="collapsed")
-        filtered = [c for c in lot if search_in.upper() in c["plate"].upper()] if search_in else lot
-        
+        filtered = [
+            v for v in vehicles_in
+            if search_in.upper() in v["plate_number"].upper()
+        ] if search_in else vehicles_in
+
         with st.container(height=490, border=True):
             if not filtered:
-                st.caption("Không tìm thấy xe.")
+                st.caption("Không tìm thấy xe." if search_in else "Bãi đang trống.")
             else:
-                for car in filtered:
-                    st.info(f"**{car['plate']}** \n\n Giờ vào: {car['time_in']} | Vị trí: **{car['slot']}**")
+                for v in filtered:
+                    st.info(
+                        f"**{v['plate_number']}**\n\n"
+                        f"Vào: {fmt_date(v['time_in'])} {fmt_time(v['time_in'])} | Vé: **#{v['ticket_id']}**"
+                    )
 
-    # --- TAB 2: LỊCH SỬ HỆ THỐNG KÈM ĐẦY ĐỦ BỘ LỌC NGÀY GIỜ ---
+    # --- TAB 2: LỊCH SỬ ---
     with tab_hist:
         search_hist = st.text_input("Tìm lịch sử:", placeholder="Nhập biển số...", key="search_hist", label_visibility="collapsed")
-        
         selected_date = st.date_input("Chọn ngày:", datetime.date.today())
         t1, t2 = st.columns(2)
         with t1:
             start_t = st.time_input("Từ:", datetime.time(0, 0))
         with t2:
             end_t   = st.time_input("Đến:", datetime.time(23, 59))
-            
-        hist_filtered = [h for h in st.session_state.history if search_hist.upper() in h["plate"].upper()] if search_hist else st.session_state.history
-        
+
+        hist_filtered = [
+            h for h in recent_logs
+            if search_hist.upper() in h["plate_number"].upper()
+        ] if search_hist else recent_logs
+
         with st.container(height=240, border=True):
             if not hist_filtered:
                 st.caption("Không có dữ liệu.")
             else:
                 for h in hist_filtered:
-                    st.success(
-                        f"**{h['plate']}** \n\n"
-                        f"Vào: {h['date_in']} {h['time_in']} \n\n"
-                        f"Ra:  {h['date_out']} {h['time_out']} \n\n"
-                        f"Phí: **{h['fee']}**"
-                    )
+                    time_out_disp = fmt_time(h["time_out"]) if h.get("time_out") else "--:--:--"
+                    date_out_disp = fmt_date(h["time_out"]) if h.get("time_out") else "--/--/----"
+                    fee_disp      = f"{h['fee']:,.0f}đ" if h.get("status") == "OUT" else "Đang trong bãi"
 
-# ══════════════════════════════════════════════════════════════════════
-# CỘT GIỮA – MÀN HÌNH CAMERA NHẬN DIỆN VÀ THAO TÁC ĐIỀU KHIỂN
-# ══════════════════════════════════════════════════════════════════════
+                    if h.get("status") == "OUT":
+                        st.success(
+                            f"**{h['plate_number']}** (Vé #{h['ticket_id']})\n\n"
+                            f"Vào: {fmt_date(h['time_in'])} {fmt_time(h['time_in'])}\n\n"
+                            f"Ra:  {date_out_disp} {time_out_disp}\n\n"
+                            f"Phí: **{fee_disp}**"
+                        )
+                    else:
+                        st.info(
+                            f"**{h['plate_number']}** (Vé #{h['ticket_id']})\n\n"
+                            f"Vào: {fmt_date(h['time_in'])} {fmt_time(h['time_in'])}\n\n"
+                            f"Phí: **{fee_disp}**"
+                        )
+
+# CỘT GIỮA – CAMERA & ĐIỀU KHIỂN (SEMI-MANUAL)
 with col_center:
     st.markdown("<p style='font-weight:bold; margin:0;'>Màn hình nhận diện</p>", unsafe_allow_html=True)
     img_buffer = st.camera_input("Quét biển số xe", label_visibility="collapsed")
 
+    # Khi chụp ảnh qua camera trình duyệt → OCR một lần
     if img_buffer:
-        fake_plates = ["29A-111.11", "30K-999.99", "51G-777.77", "43B-654.32"]
-        detected = random.choice(fake_plates)
-        st.session_state.last_scanned = detected
-    
-    st.markdown("<p style='font-weight:bold; margin-top:0.4rem; margin-bottom:0;'>Nhập thủ công / Xác nhận</p>", unsafe_allow_html=True)
-    manual_plate = st.text_input(
-        "Biển số xe:",
-        value=st.session_state.last_scanned or "",
-        placeholder="VD: 29A-123.45",
-        key="manual_plate",
-        label_visibility="collapsed"
-    )
+        # Đọc ảnh từ buffer của Streamlit
+        image = Image.open(img_buffer)
+        # Chuyển sang mảng numpy format BGR của OpenCV
+        frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-    # Đồng bộ hiển thị: Khi người dùng nhập tay, vùng hiển thị "Biển số xe" ở cột phải cũng cập nhật theo
-    if manual_plate:
-        st.session_state.last_scanned = manual_plate.strip().upper()
+        # 1. Phát hiện biển số bằng YOLO
+        bbox = detect_license_plate(frame)
+        if bbox is not None:
+            # 2. Cắt và tiền xử lý
+            processed_crop = process_plate(frame, bbox)
+            if processed_crop is not None:
+                # 3. Đọc chữ bằng OCR
+                text = ocr_engine.read_plate(processed_crop)
+                if text:
+                    # Gán vào biển số thủ công để user chỉ việc bấm xác nhận
+                    st.session_state.last_scanned = text
+                    st.success(f"OCR thành công: **{text}**")
+                else:
+                    st.warning("Tìm thấy biển nhưng không đọc được chữ!")
+            else:
+                st.warning("Lỗi tiền xử lý ảnh crop!")
+
+            # Vẽ khung nhận diện lên ảnh để hiển thị
+            x1, y1, x2, y2 = map(int, bbox)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            if 'text' in locals() and text:
+                cv2.rectangle(frame, (x1, max(0, y1 - 35)), (x2, y1), (0, 0, 0), -1)
+                cv2.putText(frame, text, (x1 + 5, max(20, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        else:
+            st.warning("Không tìm thấy biển số trong ảnh!")
+
+        # Hiển thị ảnh đã được vẽ box
+        st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_container_width=True)
+
+    # ── SEMI-MANUAL: Hiển thị biển số camera phát hiện ──
+    # live_test.py ghi vào DB → Dashboard đọc → nhân viên confirm
+    if camera_detected:
+        # Nếu camera phát hiện biển mới, cập nhật vào session
+        if camera_detected != st.session_state.get("last_scanned", ""):
+            st.session_state.last_scanned = camera_detected
+        st.success(f"Camera phát hiện: **{camera_detected}** — Nhấn XE VÀO hoặc XE RA để xác nhận")
+
+    st.markdown("<p style='font-weight:bold; margin-top:0.4rem; margin-bottom:0;'>Xác nhận giao dịch</p>", unsafe_allow_html=True)
+    
+    # Lấy trực tiếp từ kết quả quét, bỏ qua ô nhập tay
+    current_plate = st.session_state.last_scanned or ""
 
     now = datetime.datetime.now()
     btn1, btn2 = st.columns(2)
 
     with btn1:
         if st.button("XE VÀO", use_container_width=True, type="primary"):
-            plate = manual_plate.strip().upper()
+            plate = current_plate.strip().upper()
             if not plate:
                 st.warning("Vui lòng nhập biển số!")
-            elif plate in [c["plate"].upper() for c in lot]:
-                st.error("Xe đã có trong bãi!")
-            elif len(lot) >= capacity:
-                st.error("Bãi đã đầy!")
             else:
-                new_slot = f"{random.choice('ABCD')}{random.randint(1,9):02d}"
-                st.session_state.parking_lot.append({
-                    "plate": plate, "time_in": now.strftime("%H:%M:%S"),
-                    "date_in": now.strftime("%d/%m/%Y"), "slot": new_slot,
-                })
-                st.session_state.last_action, st.session_state.last_action_plate, st.session_state.last_action_slot, st.session_state.last_action_fee = "in", plate, new_slot, ""
-                st.rerun()
+                result = db.process_vehicle(plate)
+                s = result.get("status")
+                if s == "CHECK-IN":
+                    st.session_state.last_action       = "in"
+                    st.session_state.last_action_plate = plate
+                    st.session_state.last_action_slot  = f"Vé #{result.get('ticket_id')}"
+                    st.session_state.last_action_fee   = ""
+                    st.session_state.last_out_info     = {}
+                    db.clear_detected_plate()   # Xóa biển đã xử lý khỏi queue camera
+                    st.rerun()
+                elif s == "CHECK-OUT":
+                    st.error("⚠️ Xe đã có trong bãi — vui lòng dùng nút XE RA!")
+                elif s == "FULL":
+                    st.error(result.get("message", "Bãi đã đầy!"))
+                else:
+                    st.error(result.get("message", "Lỗi không xác định!"))
 
     with btn2:
         if st.button("XE RA", use_container_width=True):
-            plate = manual_plate.strip().upper()
+            plate = current_plate.strip().upper()
             if not plate:
                 st.warning("Vui lòng nhập biển số!")
             else:
-                found = next((c for c in lot if c["plate"].upper() == plate), None)
-                if not found:
-                    st.error("Không tìm thấy xe trong bãi!")
-                else:
-                    try: hours = max(1, now.hour - int(found["time_in"].split(":")[0]))
-                    except: hours = 1
-                    fee = hours * st.session_state.fee_per_hour
-                    st.session_state.parking_lot.remove(found)
+                result = db.process_vehicle(plate)
+                s = result.get("status")
+                if s == "CHECK-OUT":
                     record = {
-                        "plate": found["plate"], "date_in": found["date_in"], "time_in": found["time_in"],
-                        "date_out": now.strftime("%d/%m/%Y"), "time_out": now.strftime("%H:%M:%S"), "fee": f"{fee:,}đ",
+                        "plate":     plate,
+                        "ticket_id": result.get("ticket_id"),
+                        "fee":       f"{result.get('fee', 0):,.0f}đ",
+                        "hours":     result.get("hours", 0),
+                        "minutes":   result.get("minutes", 0),
+                        "time_out":  now.strftime("%H:%M:%S"),
+                        "date_out":  now.strftime("%d/%m/%Y"),
                     }
-                    st.session_state.history.insert(0, record)
-                    st.session_state.last_action, st.session_state.last_action_plate, st.session_state.last_action_fee, st.session_state.last_action_slot, st.session_state.last_out_info = "out", found["plate"], f"{fee:,}đ", found["slot"], record
+                    st.session_state.last_action       = "out"
+                    st.session_state.last_action_plate = plate
+                    st.session_state.last_action_fee   = f"{result.get('fee', 0):,.0f}đ"
+                    st.session_state.last_action_slot  = ""
+                    st.session_state.last_out_info     = record
+                    db.clear_detected_plate()   # Xóa biển đã xử lý khỏi queue camera
                     st.rerun()
+                elif s == "CHECK-IN":
+                    st.error("Xe chưa vào bãi — vui lòng dùng nút XE VÀO!")
+                else:
+                    st.error(result.get("message", "Không tìm thấy xe trong bãi!"))
 
-# ══════════════════════════════════════════════════════════════════════
-# CỘT PHẢI – CHỖ TRỐNG TINH GỌN, ĐỐI CHIẾU CỐ ĐỊNH & CÀI ĐẶT ẨN
-# ══════════════════════════════════════════════════════════════════════
+# CỘT PHẢI – TRẠNG THÁI, ĐỐI CHIẾU & CÀI ĐẶT
 with col_right:
-    # ── 1. TRẠNG THÁI CHỖ TRỐNG TINH GỌN ──
-    free_slots = capacity - len(lot)
+    # ── 1. TRẠNG THÁI CHỖ TRỐNG ──
+    free_slots = capacity - occupancy
     st.markdown(f"Chỗ còn trống: **{free_slots} / {capacity}**")
-    st.progress(len(lot) / capacity)
-    
+    st.progress(occupancy / capacity if capacity > 0 else 0)
+
+    # ── Doanh thu hôm nay ──
+    rev       = revenue_data.get("revenue", 0)
+    checkouts = revenue_data.get("checkouts", 0)
+    st.caption(f"Doanh thu hôm nay: **{rev:,.0f}đ** ({checkouts} lượt ra)")
+
     st.divider()
     st.subheader("Thông tin chi tiết")
 
-    # Thông báo trạng thái hành động vừa click
+    # ── Thông báo trạng thái ──
     action = st.session_state.last_action
-    if action == "in": st.success("XE VÀO THÀNH CÔNG")
-    elif action == "out": st.error("XE RA THÀNH CÔNG")
-    else: st.info("Đang chờ quét xe...")
+    if action == "in":    st.success("XE VÀO THÀNH CÔNG ✅")
+    elif action == "out": st.error("XE RA THÀNH CÔNG 🚗")
+    else:                 st.info("Đang chờ quét xe...")
 
-    # ── 2. BIỂN SỐ XE (Hiển thị đồng bộ khi quét hoặc nhập tay) ──
+    # ── 2. BIỂN SỐ XE ──
     st.write("**Biển số xe:**")
     st.code(st.session_state.last_scanned or "-- --- --", language="text")
 
-    # ── 3. KHUNG ĐỐI CHIẾU THỜI GIAN CỐ ĐỊNH ──
+    # ── 3. KHUNG ĐỐI CHIẾU THỜI GIAN ──
     st.write("**Đối chiếu thời gian:**")
-    
-    # Thiết lập giá trị mặc định liên tục xuất hiện trên form
-    p_date_in, p_time_in, p_date_out, p_time_out, p_fee = "--/--/----", "--:--:--", "--/--/----", "--:--:--", "0đ"
-    
-    if action == "in" and st.session_state.last_action_plate:
-        found_car = next((c for c in lot if c["plate"].upper() == st.session_state.last_action_plate.upper()), None)
-        if found_car:
-            p_date_in  = found_car['date_in']
-            p_time_in  = found_car['time_in']
-            p_fee      = "Xe đang trong bãi"
-            
-    elif action == "out" and st.session_state.last_action_plate:
-        info = st.session_state.get("last_out_info", {})
-        if info:
-            p_date_in  = info['date_in']
-            p_time_in  = info['time_in']
-            p_date_out = info['date_out']
-            p_time_out = info['time_out']
-            p_fee      = info['fee']
 
-    # Hiển thị biểu mẫu thông tin thời gian cố định (Đã bỏ dòng hiển thị biển số lặp ở đây)
-    st.write(f"Ngày vào: {p_date_in}")
-    st.write(f"Giờ vào:  {p_time_in}")
-    st.write(f"Ngày ra:  {p_date_out}")
-    st.write(f"Giờ ra:   {p_time_out}")
+    p_date_in = p_time_in = p_date_out = p_time_out = "--"
+    p_fee = "0đ"
+
+    if action == "in" and st.session_state.last_action_plate:
+        found = next(
+            (v for v in vehicles_in if v["plate_number"].upper() == st.session_state.last_action_plate.upper()),
+            None,
+        )
+        if found:
+            p_date_in = fmt_date(found["time_in"])
+            p_time_in = fmt_time(found["time_in"])
+            p_fee     = "Xe đang trong bãi"
+            p_date_out = "--"
+            p_time_out = "--"
+
+    elif action == "out":
+        info = st.session_state.last_out_info
+        if info:
+            p_date_in  = info.get("date_out", "--")
+            p_time_in  = f"{info.get('hours', 0)}h {info.get('minutes', 0)}m (tổng)"
+            p_date_out = info.get("date_out", "--")
+            p_time_out = info.get("time_out", "--")
+            p_fee      = info.get("fee", "0đ")
+
+    st.write(f"Ngày vào:     {p_date_in}")
+    st.write(f"Giờ vào:      {p_time_in}")
+    st.write(f"Ngày ra:      {p_date_out}")
+    st.write(f"Giờ ra:       {p_time_out}")
     st.write(f"Phí gửi:  **{p_fee}**")
 
     st.divider()
 
-    # ── 4. CÀI ĐẶT HỆ THỐNG DẠNG ẨN ──
+    # ── 4. CÀI ĐẶT HỆ THỐNG ──
     with st.popover("Cài đặt hệ thống", use_container_width=True):
         st.markdown("**Cấu hình thông số bãi xe**")
-        new_capacity = st.number_input("Sức chứa tối đa (chỗ):", min_value=1, max_value=500, value=st.session_state.capacity, step=1)
-        new_fee = st.number_input("Giá gửi xe (đ/giờ):", min_value=500, max_value=100000, value=st.session_state.fee_per_hour, step=500)
-        if st.button("Lưu cấu hình", use_container_width=True):
-            st.session_state.capacity = new_capacity
-            st.session_state.fee_per_hour = new_fee
-            st.toast("Đã lưu cài đặt!")
-            st.rerun()
+        new_capacity = st.number_input(
+            "Sức chứa tối đa (chỗ):",
+            min_value=1, max_value=500, value=capacity, step=1,
+        )
+        if st.button("Lưu sức chứa", use_container_width=True):
+            ok = db.set_max_capacity(new_capacity)
+            if ok:
+                st.toast(f"Đã lưu sức chứa: {new_capacity} chỗ!")
+                st.rerun()
+            else:
+                st.error(f"Không thể giảm xuống {new_capacity} — hiện có {occupancy} xe trong bãi!")
+
+        st.divider()
+        st.caption(
+            "Giá vé: chỉnh trong `modules/config.py`\n\n"
+            "Camera thật: `python modules/live_test.py`\n\n"
+            "Dashboard tự làm mới mỗi 5s khi cài `streamlit-autorefresh`"
+        )
+
+    # ── 5. AUTO-REFRESH ──
+    if AUTO_REFRESH_SEC > 0:
+        try:
+            from streamlit_autorefresh import st_autorefresh
+            st_autorefresh(interval=AUTO_REFRESH_SEC * 1000, key="dashboard_refresh")
+        except ImportError:
+            if st.button("Làm mới", use_container_width=True):
+                st.rerun()
