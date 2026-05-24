@@ -148,20 +148,27 @@ import os
 import logging
 
 # ---------------------------------------------------------------------------
-# CẤU HÌNH
+# CẤU HÌNH — tất cả thông số được đọc từ config.py (nguồn chân lý duy nhất)
 # ---------------------------------------------------------------------------
-
-DB_PATH = os.environ.get("PARKING_DB_PATH", "parking.db")
-
-# Sức chứa tối đa của bãi (chỉnh lại tuỳ thực tế)
-MAX_CAPACITY: int = 50
-
-# Bảng giá (VNĐ) — chỉnh tại một nơi duy nhất, hiệu lực toàn hệ thống
-PRICE_FLOOR      = 5_000    # Giá sàn (≤ 30 phút đầu)
-PRICE_HALF_HOUR  = 8_000    # 30 phút < t < 60 phút
-PRICE_PER_HOUR   = 10_000   # Mỗi giờ trọn vẹn
-PRICE_EXTRA_HALF = 5_000    # Phút lẻ sau giờ trọn: ≤ 30 phút
-PRICE_EXTRA_FULL = 8_000    # Phút lẻ sau giờ trọn: > 30 phút
+try:
+    from config import (
+        DB_PATH,
+        MAX_CAPACITY,
+        PRICE_FLOOR,
+        PRICE_HALF_HOUR,
+        PRICE_PER_HOUR,
+        PRICE_EXTRA_HALF,
+        PRICE_EXTRA_FULL,
+    )
+except ImportError:
+    # Fallback khi chạy database_manager.py trực tiếp ngoài thư mục modules/
+    DB_PATH          = os.environ.get("PARKING_DB_PATH", "parking.db")
+    MAX_CAPACITY     = 50
+    PRICE_FLOOR      = 5_000
+    PRICE_HALF_HOUR  = 8_000
+    PRICE_PER_HOUR   = 10_000
+    PRICE_EXTRA_HALF = 5_000
+    PRICE_EXTRA_FULL = 8_000
 
 # Định dạng timestamp thống nhất toàn hệ thống (ISO-8601 microseconds)
 DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
@@ -537,6 +544,58 @@ def set_max_capacity(new_capacity: int, db_path: str = DB_PATH) -> bool:
         conn.commit()
         log.info("Đã cập nhật MAX_CAPACITY = %d", new_capacity)
         return True
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# SEMI-MANUAL MODE — Chia sẻ biển số detect được với Dashboard
+# ---------------------------------------------------------------------------
+
+def update_detected_plate(plate_number: str, db_path: str = DB_PATH) -> None:
+    """
+    Ghi biển số vừa được camera/OCR phát hiện vào bảng parking_config.
+    Dashboard (app.py) đọc lại để hiển thị và chờ nhân viên xác nhận.
+
+    Dùng trong Semi-manual mode: live_test.py gọi hàm này thay vì
+    gọi trực tiếp process_vehicle().
+    """
+    plate_number = plate_number.strip().upper()
+    conn = _get_connection(db_path)
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO parking_config (key, value) VALUES ('last_detected_plate', ?)",
+            (plate_number,),
+        )
+        conn.commit()
+        log.info("Camera phát hiện biển số: %s", plate_number)
+    finally:
+        conn.close()
+
+
+def get_detected_plate(db_path: str = DB_PATH) -> str:
+    """
+    Lấy biển số mới nhất mà camera phát hiện (chưa được nhân viên confirm).
+    Trả về chuỗi rỗng nếu chưa có.
+    """
+    conn = _get_connection(db_path)
+    try:
+        row = conn.execute(
+            "SELECT value FROM parking_config WHERE key = 'last_detected_plate'"
+        ).fetchone()
+        return row["value"] if row else ""
+    finally:
+        conn.close()
+
+
+def clear_detected_plate(db_path: str = DB_PATH) -> None:
+    """Xóa biển số vừa detect sau khi nhân viên đã xử lý."""
+    conn = _get_connection(db_path)
+    try:
+        conn.execute(
+            "DELETE FROM parking_config WHERE key = 'last_detected_plate'"
+        )
+        conn.commit()
     finally:
         conn.close()
 

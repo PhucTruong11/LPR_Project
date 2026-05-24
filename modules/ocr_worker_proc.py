@@ -1,12 +1,5 @@
-"""
-OCR Worker Process
-------------------
-Chạy trong process riêng biệt (multiprocessing) để tránh bị GIL của PaddleOCR
-block main thread hiển thị camera.
-
-File tách ra riêng để khi Windows spawn child process,
-nó KHÔNG re-import detection.py (YOLO) — tiết kiệm RAM và tránh lỗi.
-"""
+# Chạy trong process riêng biệt (multiprocessing) để tránh bị GIL của PaddleOCR
+# block main thread hiển thị camera.
 
 import cv2
 
