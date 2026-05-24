@@ -1,6 +1,7 @@
 opencv-python
 ultralytics
-easyocr
+paddlepaddle
+paddleocr
 streamlit
 numpy
 torch

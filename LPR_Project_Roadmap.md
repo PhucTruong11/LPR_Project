@@ -23,7 +23,7 @@ Dự án Xây dựng hệ thống Nhận diện Biển số xe (License Plate Re
 1. **Phát hiện biển số (Object Detection):**
    - **Mô hình:** YOLOv11 (hoặc YOLOv8). Xử lý frame video thời gian thực để tìm xe và vùng biển số.
 2. **Xử lý ảnh & OCR (Image Processing & Recognition):**
-   - **Công cụ:** OpenCV (làm nét, nhị phân hóa) và EasyOCR/PaddleOCR (đọc chuỗi ký tự).
+   - **Công cụ:** OpenCV (làm nét, nhị phân hóa) và PaddleOCR (đọc chuỗi ký tự).
 3. **Quản lý Dữ liệu (Database Management):**
    - **Công cụ:** SQLite3.
    - **Nhiệm vụ:** Lưu trữ bảng `parking_logs` với các trường thông tin: Biển số, Thời gian vào, Thời gian ra, Trạng thái (IN/OUT), Phí gửi xe.
@@ -46,7 +46,7 @@ Dự án Xây dựng hệ thống Nhận diện Biển số xe (License Plate Re
 - Thiết lập Pipeline xử lý ảnh bằng OpenCV.
 
 ### Tuần 3: Tích hợp OCR & Cơ sở dữ liệu (Hiện tại)
-- Triển khai EasyOCR/PaddleOCR để trích xuất text.
+- Triển khai PaddleOCR để trích xuất text.
 - Thiết kế Schema SQLite (Bảng `parking_logs`).
 - Viết hàm `check_in()` và `check_out()` tương tác với Database.
 
@@ -96,14 +96,14 @@ Hệ thống được chia thành 4 Module hoạt động song song để quản
 | Module | Tên | Công nghệ | Nhiệm vụ |
 |--------|-----|-----------|----------|
 | **Module 1** | Capture (Camera) | OpenCV / Streamlit | Quản lý luồng video (Real-time feed) từ cổng vào/ra. |
-| **Module 2** | AI Core (LPR) | YOLO + EasyOCR | Xác định và trích xuất chuỗi biển số từ khung hình. |
+| **Module 2** | AI Core (LPR) | YOLO + PaddleOCR | Xác định và trích xuất chuỗi biển số từ khung hình. |
 | **Module 3** | DB Logic (Ticket) | SQLite3 + Python | Quyết định Check-in/Check-out, ghi nhận log và tính tiền. |
 | **Module 4** | Dashboard (UI) | Streamlit | Giám sát trạng thái hoạt động, báo cáo doanh thu. |
 
 ### 🚉 Module 1 & 2 — AI LPR (Cốt lõi nhận diện)
 - Luồng video được quét mỗi `n` frame (skip frames) để giảm tải.
 - **YOLOv11** phát hiện hộp giới hạn xe và biển số.
-- Vùng biển số được cắt, tăng độ tương phản (CLAHE) bằng **OpenCV** và chuyển thành văn bản bằng **EasyOCR**.
+- Vùng biển số được cắt, tăng độ tương phản (CLAHE) bằng **OpenCV** và chuyển thành văn bản bằng **PaddleOCR**.
 - **RegEx** làm sạch kết quả: `30G-123.45#` → `30G12345`.
 
 ### 🚉 Module 3 — DB & Billing Logic (Trạm ra/vào)
@@ -128,7 +128,7 @@ LPR_Project/
 │   ├── database_manager.py   # Logic DB: Tính phí, Check-in/Check-out
 │   ├── detection.py          # Logic nhận diện biển số (gọi YOLO, trả bbox)
 │   ├── processing.py         # Sản phẩm của Thành viên 3 (OpenCV pipeline)
-│   └── ocr_engine.py         # Sản phẩm của Thành viên 4 (EasyOCR + RegEx)
+│   └── ocr_engine.py         # Sản phẩm của Thành viên 4 (PaddleOCR + RegEx)
 ├── app.py                    # File chính — Sản phẩm của Nhóm trưởng (UI & Pipeline)
 ├── requirements.txt          # Danh sách thư viện cần cài đặt
 └── Implementation_Guide.md   # File hướng dẫn chi tiết từng bước
@@ -159,7 +159,7 @@ LPR_Project/
 | Vấn đề | Giải pháp nhanh |
 |--------|----------------|
 | Giao diện web | **Streamlit** — viết Python thuần, không cần HTML/CSS/JS. |
-| Đọc chữ (OCR) | **EasyOCR** hoặc PaddleOCR — hỗ trợ ký tự Latin, ổn định ngay cả ảnh hơi mờ. |
+| Đọc chữ (OCR) | **PaddleOCR** — hỗ trợ đa ngôn ngữ, ổn định ngay cả ảnh hơi mờ. |
 | Real-time quá chậm | **Plan B:** Upload Video → Xử lý → Trả kết quả (thay vì live webcam). |
 
 ### 🔵 Kỹ thuật nâng cao: Giảm Delay khi chạy Video/Webcam
