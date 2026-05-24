@@ -75,19 +75,18 @@ Dự án Nhận diện Biển số xe (LPR) được chia làm 5 trạm (Station
 **Phụ trách: 🚉 Trạm 4 (OCR) & Hỗ trợ Trạm 5 (Post-processing)**
 
 **Nhiệm vụ:**
-- Cài đặt và sử dụng **EasyOCR** hoặc **PaddleOCR** để đọc chữ từ ảnh biển số đã qua xử lý của Thành viên 3.
+- Cài đặt và sử dụng **PaddleOCR** để đọc chữ từ ảnh biển số đã qua xử lý của Thành viên 3.
 - Xử lý bài toán đọc sai thứ tự đối với biển số vuông (biển có 2 dòng).
 - Viết các đoạn code (hoặc biểu thức chính quy - RegEx) dựa theo luật biển số xe Việt Nam để tự động sửa lỗi sai phổ biến (Ví dụ: OCR hay nhầm số `8` thành chữ `B`, số `0` thành chữ `D` ở phần chứa số).
 
 **Output cần đạt:** Hàm Python nhận đầu vào là ảnh biển số đã qua xử lý, trả về chuỗi văn bản (String) cuối cùng cực kỳ chính xác (VD: `"30G12345"`).
 
 **📚 Cần học:**
-- **Thư viện OCR:** Cách khởi tạo và dùng EasyOCR hoặc PaddleOCR để đọc chữ từ ảnh.
+- **Thư viện OCR:** Cách khởi tạo và dùng PaddleOCR để đọc chữ từ ảnh.
 - **Logic biển số VN:** Phân biệt biển dài (1 dòng) và biển vuông (2 dòng) dựa trên tỷ lệ khung hình (Aspect Ratio).
 - **Regular Expression (RegEx):** Cách viết các pattern để lọc ký tự rác và map lỗi (VD: map chữ thành số tùy vị trí).
 
 **🔗 Nguồn tham khảo & Công cụ:**
-- **EasyOCR:** [GitHub JaidedAI/EasyOCR](https://github.com/JaidedAI/EasyOCR).
-- **PaddleOCR:** [PaddlePaddle OCR Documentation](https://github.com/PaddlePaddle/PaddleOCR) (Đọc chữ cực mạnh, ít bị nhầm 0/D).
+- **PaddleOCR:** [GitHub PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (Đọc chữ cực mạnh, ít bị nhầm 0/D).
 - **RegEx:** [Regex101](https://regex101.com/) để test các đoạn code RegEx; Các bài viết "Học RegEx trong 10 phút".
-- **Công cụ:** `easyocr` (hoặc `paddleocr`), thư viện `re` (có sẵn trong Python).
+- **Công cụ:** `paddleocr`, thư viện `re` (có sẵn trong Python).

@@ -34,7 +34,7 @@ Dự án tập trung vào việc tự động hóa quy trình check-in/check-out
 | **PyTorch** | Deep Learning framework cho YOLO |
 | **Ultralytics YOLO** | Mô hình phát hiện đối tượng |
 | **OpenCV** | Xử lý ảnh và video |
-| **EasyOCR** | Nhận dạng ký tự (OCR) |
+| **PaddleOCR** | Nhận dạng ký tự (OCR) |
 | **Streamlit** | Giao diện web |
 | **NumPy** | Xử lý dữ liệu mảng |
 | **SQLite3** | Quản lý Cơ sở dữ liệu (Log xe ra vào) |
@@ -78,7 +78,7 @@ LPR_Project/
 |--------|-----------|
 | **detection.py** | Tích hợp YOLO v8/v11 để phát hiện biển số, trả về bounding box |
 | **processing.py** | Xử lý ảnh: crop, grayscale, threshold, deskew, tăng tương phản |
-| **ocr_engine.py** | Tích hợp EasyOCR/PaddleOCR, hậu xử lý và kiểm tra định dạng |
+| **ocr_engine.py** | Tích hợp PaddleOCR, hậu xử lý và kiểm tra định dạng |
 
 ---
 
@@ -121,11 +121,11 @@ Chi tiết xem [Implementation_Guide.md](Implementation_Guide.md)
 **Kết quả**: Ảnh biển số được chuẩn bị tốt cho OCR
 
 ### Phase 3: Tích hợp OCR & Hậu xử lý (Tuần 3-4)
-- ⏳ Cài đặt EasyOCR/PaddleOCR
-- ⏳ Xử lý xếp dòng (1 dòng vs 2 dòng)
-- ⏳ Viết logic hậu xử lý với RegEx
-- ⏳ Kiểm tra định dạng biển số Việt Nam
-- ⏳ Sửa lỗi OCR phổ biến (0→O, 1→I, v.v.)
+- ✅ Cài đặt PaddleOCR
+- ✅ Xử lý xếp dòng (1 dòng vs 2 dòng)
+- ✅ Viết logic hậu xử lý với RegEx
+- ✅ Kiểm tra định dạng biển số Việt Nam
+- ✅ Sửa lỗi OCR phổ biến (0→O, 1→I, v.v.)
 
 **Kết quả**: Nhận dạng text chính xác từ biển số
 
@@ -173,7 +173,7 @@ Chi tiết xem [Implementation_Guide.md](Implementation_Guide.md)
                      ▼
         ┌──────────────────────────────────┐
         │  Module OCR Engine                │
-        │  → EasyOCR / PaddleOCR           │
+        │  → PaddleOCR                      │
         │  → Đọc ký tự                     │
         └────────────┬─────────────────────┘
                      │
@@ -219,7 +219,7 @@ Một số vấn đề phổ biến:
 
 - [YOLOv8 Documentation](https://docs.ultralytics.com/)
 - [OpenCV Docs](https://docs.opencv.org/)
-- [EasyOCR GitHub](https://github.com/JaidedAI/EasyOCR)
+- [PaddleOCR GitHub](https://github.com/PaddlePaddle/PaddleOCR)
 - [Streamlit Docs](https://docs.streamlit.io/)
 - [LPR_Project_Roadmap.md](LPR_Project_Roadmap.md) - Kế hoạch chi tiết
 - [Implementation_Guide.md](Implementation_Guide.md) - Hướng dẫn triển khai
