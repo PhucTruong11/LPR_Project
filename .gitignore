@@ -237,3 +237,5 @@ venv/
 
 # Database
 *.db
+*.db-wal
+*.db-shm
