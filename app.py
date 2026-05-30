@@ -169,32 +169,44 @@ with col_center:
 
     # Khi chụp ảnh qua camera trình duyệt → OCR một lần
     if img_buffer:
+        # Tạo ID duy nhất cho bức ảnh dựa trên tên và kích thước để tránh chạy lại AI vô ích khi Rerun trang
+        current_img_id = f"{img_buffer.name}_{img_buffer.size}"
+        
         # Đọc ảnh từ buffer của Streamlit
         image = Image.open(img_buffer)
         # Chuyển sang mảng numpy format BGR của OpenCV
         frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-        # 1. Phát hiện biển số bằng YOLO
-        bbox = detect_license_plate(frame)
+        # Kiểm xem ảnh này đã được quét AI chưa
+        if st.session_state.get("processed_img_id") != current_img_id:
+            bbox = detect_license_plate(frame)
+            text = None
+            if bbox is not None:
+                processed_crop = process_plate(frame, bbox)
+                if processed_crop is not None:
+                    text = ocr_engine.read_plate(processed_crop)
+            
+            # Lưu kết quả vào session state để dùng lại
+            st.session_state.processed_img_id = current_img_id
+            st.session_state.last_scanned_bbox = bbox
+            st.session_state.last_scanned_text = text
+        else:
+            # Tái sử dụng kết quả đã nhận diện trước đó
+            bbox = st.session_state.get("last_scanned_bbox")
+            text = st.session_state.get("last_scanned_text")
+
+        # Vẽ UI dựa trên kết quả nhận diện đã được caching
         if bbox is not None:
-            # 2. Cắt và tiền xử lý
-            processed_crop = process_plate(frame, bbox)
-            if processed_crop is not None:
-                # 3. Đọc chữ bằng OCR
-                text = ocr_engine.read_plate(processed_crop)
-                if text:
-                    # Gán vào biển số thủ công để user chỉ việc bấm xác nhận
-                    st.session_state.last_scanned = text
-                    st.success(f"OCR thành công: **{text}**")
-                else:
-                    st.warning("Tìm thấy biển nhưng không đọc được chữ!")
+            if text:
+                st.session_state.last_scanned = text
+                st.success(f"OCR thành công: **{text}**")
             else:
-                st.warning("Lỗi tiền xử lý ảnh crop!")
+                st.warning("Tìm thấy biển nhưng không đọc được chữ!")
 
             # Vẽ khung nhận diện lên ảnh để hiển thị
             x1, y1, x2, y2 = map(int, bbox)
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            if 'text' in locals() and text:
+            if text:
                 cv2.rectangle(frame, (x1, max(0, y1 - 35)), (x2, y1), (0, 0, 0), -1)
                 cv2.putText(frame, text, (x1 + 5, max(20, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
         else:
@@ -236,7 +248,7 @@ with col_center:
                     db.clear_detected_plate()   # Xóa biển đã xử lý khỏi queue camera
                     st.rerun()
                 elif s == "CHECK-OUT":
-                    st.error("⚠️ Xe đã có trong bãi — vui lòng dùng nút XE RA!")
+                    st.error("Xe đã có trong bãi — vui lòng dùng nút XE RA!")
                 elif s == "FULL":
                     st.error(result.get("message", "Bãi đã đầy!"))
                 else:
@@ -289,8 +301,8 @@ with col_right:
 
     # ── Thông báo trạng thái ──
     action = st.session_state.last_action
-    if action == "in":    st.success("XE VÀO THÀNH CÔNG ✅")
-    elif action == "out": st.error("XE RA THÀNH CÔNG 🚗")
+    if action == "in":    st.success("XE VÀO THÀNH CÔNG")
+    elif action == "out": st.error("XE RA THÀNH CÔNG")
     else:                 st.info("Đang chờ quét xe...")
 
     # ── 2. BIỂN SỐ XE ──

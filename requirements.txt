@@ -5,3 +5,5 @@ paddleocr
 streamlit
 numpy
 torch
+openvino
+plotly
