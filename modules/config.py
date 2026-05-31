@@ -9,7 +9,7 @@ import os
 VIDEO_SOURCE: int | str = 0
 
 # Kích thước cửa sổ hiển thị OpenCV (width, height)
-DISPLAY_SIZE: tuple[int, int] = (1024, 768)
+DISPLAY_SIZE: tuple[int, int] = (640, 480)
 
 # Chạy YOLO mỗi N frame (giảm tải CPU, 1 = mỗi frame)
 YOLO_INTERVAL: int = 3
@@ -34,7 +34,7 @@ VERIFY_INTERVAL: float = 2.0
 
 # Regex tối thiểu để coi biển số là hợp lệ (Vietnam plate)
 # Ví dụ hợp lệ: 29A-111.11, 51G1-23456, 30K-999.99
-PLATE_REGEX: str = r"^\d{2}[A-Z]\d?[-–]\d{3,5}\.?\d{0,2}$"
+PLATE_REGEX: str = r"^\d{2}[A-Z]\d?[-–]?\d{3,5}\.?\d{0,2}$"
 
 
 # DATABASE

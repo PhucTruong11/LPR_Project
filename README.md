@@ -93,11 +93,115 @@ LPR_Project/
 - Cài đặt dependencies: `pip install -r requirements.txt`
 
 **Chạy ứng dụng:**
-```bash
-streamlit run app.py
-```
+**Chạy ứng dụng:**
 
-Chi tiết xem [Implementation_Guide.md](Implementation_Guide.md)
+Hệ thống hỗ trợ 2 chế độ vận hành chính với luồng hoạt động cụ thể:
+
+### 1. Chế độ 1: Chạy cơ bản (Chỉ chạy Web Streamlit)
+Thích hợp để kiểm thử nhanh hoặc chạy trên máy chủ tập trung không có camera kết nối trực tiếp.
+
+*   **Lệnh khởi động:**
+    ```bash
+    streamlit run app_trial.py
+    ```
+*   **Luồng vận hành:**
+    ```
+    [Nhân viên/Khách] ──► Upload ảnh/Quay webcam web ──► YOLO + OCR (chạy trên Web) 
+                                                                  │
+                                                                  ▼
+    [Kết quả hiển thị] ◄── Bấm Xác nhận (Lưu DB) ◄── Điền kết quả vào form
+    ```
+    *   **Ưu điểm:** Tiện lợi, không cần cài đặt camera ngoài phức tạp.
+    *   **Nhược điểm:** Tải xử lý AI dồn lên luồng web Streamlit, tốc độ phản hồi chậm hơn khi xử lý video thời gian thực.
+
+### 2. Chế độ 2: Chạy kết hợp Semi-manual (Live Camera + Streamlit Dashboard)
+Chế độ khuyên dùng cho môi trường bãi đỗ thực tế. Tách biệt hoàn toàn luồng xử lý video AI nặng nề (Camera OpenCV) khỏi luồng hiển thị (Streamlit Web).
+
+*   **Lệnh khởi động (Chạy trên 2 Terminal song song):**
+    *   *Terminal 1 (Giao diện giám sát):* `streamlit run app_trial.py`
+    *   *Terminal 2 (Camera quét):* `python modules/live_test.py`
+*   **Luồng vận hành:**
+    ```
+        ┌──────────────────────────────────┐
+        │   CHẾ ĐỘ 1: CHỈ CHẠY WEB APP     │
+        └────────────┬─────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────────────┐
+        │  Tải ảnh lên / Bật webcam web    │
+        └────────────┬─────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────────────┐
+        │  Web Streamlit tự chạy xử lý AI: │
+        │  YOLO (Detect) -> OCR (Đọc chữ)  │
+        └────────────┬─────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────────────┐
+        │  Nhân viên kiểm tra kết quả      │
+        │  và bấm [XÁC NHẬN] trên web      │
+        └────────────┬─────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────────────┐
+        │  Lưu giao dịch Check-in/Out      │
+        │  vào Database (parking_logs)     │
+        └──────────────────────────────────┘
+    ```
+    *   **Ưu điểm:** Tiện lợi, không cần cài đặt camera ngoài phức tạp.
+    *   **Nhược điểm:** Tải xử lý AI dồn lên luồng web Streamlit, tốc độ phản hồi chậm hơn khi xử lý video thời gian thực.
+
+### 2. Chế độ 2: Chạy kết hợp Semi-manual (Live Camera + Streamlit Dashboard)
+Chế độ khuyên dùng cho môi trường bãi đỗ thực tế. Tách biệt hoàn toàn luồng xử lý video AI nặng nề (Camera OpenCV) khỏi luồng hiển thị (Streamlit Web).
+
+*   **Lệnh khởi động (Chạy trên 2 Terminal song song):**
+    *   *Terminal 1 (Giao diện giám sát):* `streamlit run app_trial.py`
+    *   *Terminal 2 (Camera quét):* `python modules/live_test.py`
+*   **Luồng vận hành:**
+    ```
+        ┌──────────────────────────────────┐
+        │    CHẾ ĐỘ 2: CHẠY KẾT HỢP SEMI   │
+        └────────────┬─────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────────────┐
+        │  Terminal 2: Camera quét ngầm    │
+        │  YOLO + OCR chạy liên tục ở nền  │
+        └────────────┬─────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────────────┐
+        │  Quét thấy biển số hợp lệ:       │
+        │  Ghi tạm DB (last_detected_plate)│
+        └────────────┬─────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────────────┐
+        │  Terminal 1: Web Streamlit đọc DB│
+        │  và tự điền biển số vào Form     │
+        └────────────┬─────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────────────┐
+        │  Nhân viên đối chiếu thực tế và  │
+        │  chọn một trong hai hành động:   │
+        └─────┬────────────────────┬───────┘
+              │                    │
+          Xác nhận               Bỏ qua
+              │                    │
+              ▼                    ▼
+        ┌────────────┐       ┌─────────────┐
+        │Lưu giao dịch│       │Xóa hàng đợi │
+        │  vào DB    │       │  trong DB   │
+        └────────────┘       └─────────────┘
+    ```
+    *   **Ưu điểm:** 
+        *   Tối ưu hiệu năng vượt trội nhờ kiến trúc **Multiprocessing** (nhận diện trên Process riêng, không block giao diện camera/web).
+        *   Nhân viên chỉ cần kiểm tra lại (đề phòng camera mờ/bẩn làm đọc sai) rồi bấm 1 nút Xác nhận, vô cùng nhanh chóng.
+    *   **Cơ chế liên lạc:** Hai luồng giao tiếp bất đồng bộ thông qua SQLite bằng cách sử dụng bảng cấu hình tạm `parking_config`.
+
+Chi tiết hướng dẫn cài đặt xem tại [Implementation_Guide.md](Implementation_Guide.md)
 
 ---
 
