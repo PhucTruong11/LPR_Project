@@ -123,18 +123,21 @@ Hệ thống được chia thành 4 Module hoạt động song song để quản
 LPR_Project/
 ├── parking.db                # File Database lưu vết xe ra vào
 ├── models/
-│   └── best.pt               # Sản phẩm của Thành viên 2 (YOLO model đã train)
+│   └── best.pt               # YOLO model đã train phát hiện biển số
 ├── modules/
 │   ├── database_manager.py   # Logic DB: Tính phí, Check-in/Check-out
 │   ├── detection.py          # Logic nhận diện biển số (gọi YOLO, trả bbox)
-│   ├── processing.py         # Sản phẩm của Thành viên 3 (OpenCV pipeline)
-│   └── ocr_engine.py         # Sản phẩm của Thành viên 4 (PaddleOCR + RegEx)
-├── app.py                    # File chính — Sản phẩm của Nhóm trưởng (UI & Pipeline)
+│   ├── processing.py         # Tiền xử lý ảnh (OpenCV pipeline)
+│   ├── ocr_engine.py         # Nhận dạng chữ (PaddleOCR + RegEx)
+│   ├── ocr_worker_proc.py    # Worker chạy OCR trong process riêng
+│   └── live_test.py          # Script chạy camera ngoài (OpenCV)
+├── app.py                    # File chính của bản cũ (Streamlit UI gốc)
+├── app_trial.py              # File chính bản nâng cấp (Giao diện Streamlit đầy đủ tính năng)
 ├── requirements.txt          # Danh sách thư viện cần cài đặt
 └── Implementation_Guide.md   # File hướng dẫn chi tiết từng bước
 ```
 
-> **Quy tắc chính:** Mỗi `module` trong thư mục `modules/` phải export ít nhất 1 hàm rõ ràng. `app.py` chỉ import và gọi các hàm đó, không chứa logic xử lý ảnh hay OCR trực tiếp.
+> **Quy tắc chính:** Mỗi `module` trong thư mục `modules/` phải export ít nhất 1 hàm rõ ràng. `app_trial.py` chỉ import và gọi các hàm đó, không chứa logic xử lý ảnh hay OCR trực tiếp.
 
 ---
 
