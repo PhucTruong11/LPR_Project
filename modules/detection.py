@@ -1,5 +1,3 @@
-# import os
-# import logging
 from ultralytics import YOLO
 import numpy as np 
 
