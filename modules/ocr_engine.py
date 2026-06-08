@@ -155,7 +155,6 @@ class PlateOCR:
         return raw_text
 
     def correct_plate_format(self, text):
-        """Ép kiểu ký tự bắt buộc theo vị trí tuyệt đối trong cấu trúc biển số VN."""
         text = ''.join(e for e in text if e.isalnum()).upper()
         corrected_text = ""
         
@@ -172,16 +171,11 @@ class PlateOCR:
         return corrected_text
 
     def clean_and_fix(self, text):
-        """
-        Bộ lọc RegEx chủ động — Làm sạch, sửa lỗi vị trí, và LOẠI BỎ kết quả rác.
-        Trả về chuỗi biển số đã sửa, hoặc "" nếu kết quả không đạt chuẩn.
-        """
         # Bước 1: Loại bỏ toàn bộ ký tự đặc biệt (dấu chấm, gạch ngang, khoảng trắng)
         text = re.sub(r'[^A-Z0-9]', '', text.upper())
         print(f"Sau làm sạch: '{text}'")
 
         # Bước 2: Kiểm tra độ dài — biển số VN hợp lệ có 7-9 ký tự
-        # Nếu quá ngắn hoặc quá dài → kết quả rác, từ chối ngay
         if len(text) < 7:
             print(f"Từ chối: '{text}' — Quá ngắn ({len(text)} ký tự, cần tối thiểu 7)")
             return ""
@@ -203,10 +197,6 @@ class PlateOCR:
             return fixed_text
 
     def _validate_format(self, text):
-        """
-        Kiểm tra chuỗi có khớp cấu trúc biển số xe Việt Nam hay không.
-        Trả về True nếu hợp lệ, False nếu không.
-        """
         # Pattern: 2 số (mã tỉnh) + 1 chữ (series) + chữ/số tùy chọn + 4-5 số (đuôi)
         # Ví dụ hợp lệ: 51G12345, 29A12345, 30HK99999, 59V254411
         pattern = r'^[0-9]{2}[A-Z][A-Z0-9]?[0-9]{4,5}$'

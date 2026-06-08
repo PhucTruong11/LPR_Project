@@ -361,8 +361,28 @@ with col_center:
     now = datetime.datetime.now()
     st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
 
-    # NÚT XÁC NHẬN DUY NHẤT
-    if st.button("XÁC NHẬN", use_container_width=True, type="primary"):
+    # KHU VỰC ĐIỀU KHIỂN NẰM NGANG (XÁC NHẬN & HỦY) — Đã loại bỏ @st.fragment lỗi tại đây
+    col_btn_cancel, col_btn_confirm = st.columns([1, 1])
+
+    with col_btn_cancel:
+        cancel_clicked = st.button("HỦY", use_container_width=True, type="secondary")
+
+    with col_btn_confirm:
+        confirm_clicked = st.button("XÁC NHẬN", use_container_width=True, type="primary")
+
+    if cancel_clicked:
+        st.session_state.camera_version += 1  # rebuild camera_input → xóa ảnh
+        st.session_state.processed_img_id = None
+        st.session_state.last_scanned_bbox = None
+        st.session_state.last_scanned_text = None
+        st.session_state.last_scanned = None
+        st.session_state.input_version += 1
+        st.session_state.active_source = "auto"
+        db.clear_detected_plate()
+        st.rerun()
+
+    # XỬ LÝ SỰ KIỆN NÚT XÁC NHẬN — Bây giờ đã bắt được tín hiệu hoàn hảo
+    if confirm_clicked:
         final_plate = ""
         if user_typed_plate.strip():
             final_plate = user_typed_plate.strip().upper()
@@ -381,7 +401,7 @@ with col_center:
                 st.session_state.last_action_slot  = f"Vé #{result.get('ticket_id')}"
                 st.session_state.last_action_fee   = ""
                 st.session_state.last_out_info     = {}
-                st.session_state.action_timestamp  = time.time()  # 👉 Ghi nhận thời điểm xác nhận để auto-clear sau 2s
+                st.session_state.action_timestamp  = time.time()  # 👉 Ghi nhận thời điểm xác nhận để auto-clear sau 5s
                 
                 # Làm mới toàn bộ UI: Xóa chữ, Xóa ảnh chụp, Xóa hàng đợi camera ngoài
                 st.session_state.last_scanned      = None 
@@ -405,7 +425,7 @@ with col_center:
                 st.session_state.last_action_plate = final_plate
                 st.session_state.last_action_fee   = f"{result.get('fee', 0):,.0f}đ"
                 st.session_state.last_action_slot  = ""
-                st.session_state.action_timestamp  = time.time()  # 👉 Ghi nhận thời điểm xác nhận để auto-clear sau 2s
+                st.session_state.action_timestamp  = time.time()  # 👉 Ghi nhận thời điểm xác nhận để auto-clear sau 5s
                 st.session_state.last_out_info     = record
                 
                 # Làm mới toàn bộ UI: Xóa chữ, Xóa ảnh chụp, Xóa hàng đợi camera ngoài
@@ -419,6 +439,7 @@ with col_center:
                 st.error(result.get("message", "Bãi xe đã đầy chỗ!"))
             else:
                 st.error(result.get("message", "Không tìm thấy xe hoặc xảy ra lỗi hệ thống!"))
+
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -493,7 +514,7 @@ def show_revenue_stats_modal():
     all_logs = db.get_recent_logs(limit=3000)
     today    = datetime.date.today()
 
-    tab_day, tab_week, tab_month = st.tabs(["Theo ngày", "Theo tuần", "Theo tháng"])
+    tab_day, tab_week, tab_month = st.tabs(["Trong ngày", "Trong tuần", "Trong tháng"])
 
     # ─── TAB 1: NGÀY — 24 cột theo giờ, đơn vị 0 / 25k / 50k / 100k ───
     with tab_day:
@@ -615,20 +636,19 @@ def show_revenue_stats_modal():
 # ══════════════════════════════════════════════════════════════════════
 @st.fragment(run_every=3)
 def render_col_right():
-    # Nếu camera vừa scan xong → clear flag (Đã được comment lại theo Cách 1 để tránh lỗi Fragment Rerun)
-    # if st.session_state.need_right_refresh:
-    #     st.session_state.need_right_refresh = False
-    #     st.rerun(scope="fragment")
-
-    # Auto-clear cột phải sau 2 giây kể từ lúc XÁC NHẬN
-    if st.session_state.action_timestamp and (time.time() - st.session_state.action_timestamp >= 2):
+    # 👉 NẾU CÓ BIỂN SỐ MỚI ĐANG CHỜ XỬ LÝ (last_scanned tồn tại):
+    # Hệ thống sẽ giữ nguyên màn hình, KHÔNG chạy tự động clear thông tin cũ nữa.
+    if st.session_state.last_scanned:
+        st.session_state.action_timestamp = None
+    
+    # 👉 TỰ ĐỘNG RESET SAU 5 GIÂY: Nếu không có biển mới và đã quá 5s kể từ lúc bấm XÁC NHẬN
+    elif st.session_state.action_timestamp and (time.time() - st.session_state.action_timestamp >= 5):
         st.session_state.last_action       = None
         st.session_state.last_action_plate = ""
         st.session_state.last_action_fee   = ""
         st.session_state.last_action_slot  = ""
         st.session_state.last_out_info     = {}
         st.session_state.action_timestamp  = None
-        # Sử dụng try-except để tránh StreamlitAPIException khi xảy ra Full Rerun
         try:
             st.rerun(scope="fragment")
         except Exception:
@@ -669,9 +689,11 @@ def render_col_right():
     st.write("**Biển số xe vừa thao tác:**")
     st.code(st.session_state.last_action_plate or "-- --- --", language="text")
 
-    st.write("**Đối chiếu thời gian:**")
-    p_date_in = p_time_in = p_date_out = p_time_out = "--"
+    # ══════════════════════════════════════════════════════════════════════
+    # KHU VỰC PHÍ GỬI (ĐỒNG BỘ NẰM DƯỚI BIỂN SỐ VÀ LÀM NỔI BẬT)
+    # ══════════════════════════════════════════════════════════════════════
     p_fee = "0đ"
+    p_date_in = p_time_in = p_date_out = p_time_out = "--"
 
     if action == "in" and st.session_state.last_action_plate:
         found = next(
@@ -682,6 +704,7 @@ def render_col_right():
             p_date_in = fmt_date(found["time_in"])
             p_time_in = fmt_time(found["time_in"])
             p_fee     = "Xe đang trong bãi"
+        st.info(f"**Phí gửi:** {p_fee}")
 
     elif action == "out":
         info = st.session_state.last_out_info
@@ -691,12 +714,18 @@ def render_col_right():
             p_date_out = info.get("date_out", "--")
             p_time_out = info.get("time_out", "--")
             p_fee      = info.get("fee", "0đ")
+        st.error(f"**Phí gửi:** {p_fee}")
+    else:
+        st.warning("**Phí gửi:** --đ")
+        
+    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+    # ══════════════════════════════════════════════════════════════════════
 
+    st.write("**Đối chiếu thời gian:**")
     st.write(f"Ngày vào:     {p_date_in}")
     st.write(f"Giờ vào:      {p_time_in}")
     st.write(f"Ngày ra:      {p_date_out}")
     st.write(f"Giờ ra:       {p_time_out}")
-    st.write(f"Phí gửi:  **{p_fee}**")
 
     st.divider()
 
