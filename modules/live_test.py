@@ -24,17 +24,13 @@ import threading
 
 
 def is_valid_plate(text: str) -> bool:
-    """
-    Kiểm tra biển số có đúng định dạng biển VN tối thiểu không.
-    Tránh ghi rác vào DB khi OCR đọc sai.
-    """
+    #Kiểm tra biển số có đúng định dạng biển số VN không
     if not text or len(text) < 7:
         return False
     return bool(re.match(PLATE_REGEX, text.strip().upper()))
 
 
 # CAMERA STREAM (thread riêng, không block main loop)
-
 class CameraStream:
     def __init__(self, src=0):
         self.stream = cv2.VideoCapture(src)
@@ -68,16 +64,13 @@ class CameraStream:
 
 
 # MAIN LOOP
-
 def run_live_camera(video_source=VIDEO_SOURCE):
     conn = db.init_db()
     conn.close()
 
-    # --- Hai Queue giao tiếp với OCR child process ---
-    # input_q : main → OCR   (plate crop đã xử lý)
-    # result_q: OCR → main   (text biển số)
-    input_q  = mp.Queue(maxsize=1)
-    result_q = mp.Queue(maxsize=1)
+    # Hai Queue giao tiếp với OCR
+    input_q  = mp.Queue(maxsize=1) # input_q : main → OCR   (plate crop đã xử lý)
+    result_q = mp.Queue(maxsize=1) # result_q: OCR → main   (text biển số)
 
     # --- Khởi chạy OCR process (KHÔNG phải thread → không bị GIL) ---
     import ocr_worker_proc
