@@ -514,7 +514,7 @@ def show_revenue_stats_modal():
     all_logs = db.get_recent_logs(limit=3000)
     today    = datetime.date.today()
 
-    tab_day, tab_week, tab_month = st.tabs(["Trong ngày", "Trong tuần", "Trong tháng"])
+    tab_day, tab_month = st.tabs(["Trong ngày", "Trong tháng"])
 
     # ─── TAB 1: NGÀY — 24 cột theo giờ, đơn vị 0 / 25k / 50k / 100k ───
     with tab_day:
@@ -548,45 +548,45 @@ def show_revenue_stats_modal():
         st.plotly_chart(fig, use_container_width=True)
 
     # ─── TAB 2: TUẦN — 7 cột theo ngày, đơn vị 0 / 100k / 200k / 500k ───
-    with tab_week:
-        # Chọn tuần: mặc định tuần hiện tại (Thứ 2 → Chủ nhật)
-        week_start_default = today - datetime.timedelta(days=today.weekday())
-        week_start = st.date_input("Chọn ngày bắt đầu tuần (Thứ 2):", week_start_default, key="stat_week_pick")
-        # Căn về thứ Hai gần nhất
-        week_start = week_start - datetime.timedelta(days=week_start.weekday())
-        week_end   = week_start + datetime.timedelta(days=6)
+    # with tab_week:
+    #     # Chọn tuần: mặc định tuần hiện tại (Thứ 2 → Chủ nhật)
+    #     week_start_default = today - datetime.timedelta(days=today.weekday())
+    #     week_start = st.date_input("Chọn ngày bắt đầu tuần (Thứ 2):", week_start_default, key="stat_week_pick")
+    #     # Căn về thứ Hai gần nhất
+    #     week_start = week_start - datetime.timedelta(days=week_start.weekday())
+    #     week_end   = week_start + datetime.timedelta(days=6)
 
-        week_days     = [week_start + datetime.timedelta(days=i) for i in range(7)]
-        daily_data_w  = {d: 0.0 for d in week_days}
-        total_week_rev = 0.0
-        day_vi        = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+    #     week_days     = [week_start + datetime.timedelta(days=i) for i in range(7)]
+    #     daily_data_w  = {d: 0.0 for d in week_days}
+    #     total_week_rev = 0.0
+    #     day_vi        = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
-        for h in all_logs:
-            if h.get("status") == "OUT" and h.get("time_out"):
-                try:
-                    log_dt = datetime.datetime.fromisoformat(h["time_out"])
-                    d      = log_dt.date()
-                    if d in daily_data_w:
-                        daily_data_w[d]  += float(h.get("fee", 0))
-                        total_week_rev   += float(h.get("fee", 0))
-                except:
-                    pass
+    #     for h in all_logs:
+    #         if h.get("status") == "OUT" and h.get("time_out"):
+    #             try:
+    #                 log_dt = datetime.datetime.fromisoformat(h["time_out"])
+    #                 d      = log_dt.date()
+    #                 if d in daily_data_w:
+    #                     daily_data_w[d]  += float(h.get("fee", 0))
+    #                     total_week_rev   += float(h.get("fee", 0))
+    #             except:
+    #                 pass
 
-        st.metric(
-            f"Tổng doanh thu tuần ({week_start.strftime('%d/%m')} – {week_end.strftime('%d/%m/%Y')})",
-            f"{total_week_rev:,.0f} đ"
-        )
+    #     st.metric(
+    #         f"Tổng doanh thu tuần ({week_start.strftime('%d/%m')} – {week_end.strftime('%d/%m/%Y')})",
+    #         f"{total_week_rev:,.0f} đ"
+    #     )
 
-        labels  = [f"{day_vi[i]}\n{week_days[i].strftime('%d/%m')}" for i in range(7)]
-        values  = [daily_data_w[d] for d in week_days]
-        max_val = max(values) if max(values) > 0 else 200000
-        step    = 100000
-        top     = max(200000, ((int(max_val) // step) + 2) * step)
-        y_ticks = list(range(0, top + 1, step))
-        y_labels= [f"{v//1000}k" if v > 0 else "0" for v in y_ticks]
+    #     labels  = [f"{day_vi[i]}\n{week_days[i].strftime('%d/%m')}" for i in range(7)]
+    #     values  = [daily_data_w[d] for d in week_days]
+    #     max_val = max(values) if max(values) > 0 else 200000
+    #     step    = 100000
+    #     top     = max(200000, ((int(max_val) // step) + 2) * step)
+    #     y_ticks = list(range(0, top + 1, step))
+    #     y_labels= [f"{v//1000}k" if v > 0 else "0" for v in y_ticks]
 
-        fig = make_bar_chart(labels, values, "#f39c12", y_ticks, y_labels)
-        st.plotly_chart(fig, use_container_width=True)
+    #     fig = make_bar_chart(labels, values, "#f39c12", y_ticks, y_labels)
+    #     st.plotly_chart(fig, use_container_width=True)
 
     # ─── TAB 3: THÁNG — 28-31 cột, scroll ngang, đơn vị 0 / 100k / 200k / 500k ───
     with tab_month:
@@ -616,7 +616,7 @@ def show_revenue_stats_modal():
         labels  = [f"{i}/{sel_month}" for i in range(1, days_in_month + 1)]
         values  = [daily_data_m[i] for i in range(1, days_in_month + 1)]
         max_val = max(values) if max(values) > 0 else 200000
-        step    = 100000
+        step    = 1000000
         top     = max(200000, ((int(max_val) // step) + 2) * step)
         y_ticks = list(range(0, top + 1, step))
         y_labels= [f"{v//1000}k" if v > 0 else "0" for v in y_ticks]
@@ -642,7 +642,7 @@ def render_col_right():
         st.session_state.action_timestamp = None
     
     # 👉 TỰ ĐỘNG RESET SAU 5 GIÂY: Nếu không có biển mới và đã quá 5s kể từ lúc bấm XÁC NHẬN
-    elif st.session_state.action_timestamp and (time.time() - st.session_state.action_timestamp >= 5):
+    elif st.session_state.action_timestamp and (time.time() - st.session_state.action_timestamp >= 3):
         st.session_state.last_action       = None
         st.session_state.last_action_plate = ""
         st.session_state.last_action_fee   = ""
