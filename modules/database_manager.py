@@ -3,9 +3,8 @@ import datetime
 import os
 import logging
 
-# ---------------------------------------------------------------------------
+
 # CẤU HÌNH — tất cả thông số được đọc từ config.py (nguồn chân lý duy nhất)
-# ---------------------------------------------------------------------------
 try:
     from config import (
         DB_PATH,
@@ -37,20 +36,8 @@ logging.basicConfig(
 log = logging.getLogger("parking_db")
 
 
-# ---------------------------------------------------------------------------
 # KHỞI TẠO DATABASE
-# ---------------------------------------------------------------------------
-
 def init_db(db_path: str = DB_PATH) -> sqlite3.Connection:
-    """
-    Khởi tạo (hoặc mở) database SQLite và đảm bảo schema đúng chuẩn.
-
-    Thay đổi so với phiên bản cũ
-    ----------------------------
-    - Cột `status` thêm ràng buộc NOT NULL  ← yêu cầu bắt buộc
-    - Thêm bảng `parking_config` để lưu MAX_CAPACITY linh hoạt
-    - PRAGMA foreign_keys + journal_mode WAL để an toàn khi ghi đồng thời
-    """
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row          # truy cập cột bằng tên
     conn.execute("PRAGMA journal_mode=WAL") # ghi an toàn khi nhiều reader
@@ -89,10 +76,7 @@ def init_db(db_path: str = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-# ---------------------------------------------------------------------------
 # TIỆN ÍCH NỘI BỘ
-# ---------------------------------------------------------------------------
-
 import threading
 
 class SQLiteConnectionWrapper:
@@ -148,10 +132,7 @@ def _get_max_capacity(conn: sqlite3.Connection) -> int:
 
 
 def _count_vehicles_inside(conn: sqlite3.Connection) -> int:
-    """
-    Đếm số xe đang trong bãi (status = 'IN').
-    NOT NULL trên cột status đảm bảo không bao giờ bị đếm lẫn NULL.
-    """
+    """Đếm số xe đang trong bãi (status = 'IN')."""
     row = conn.execute(
         "SELECT COUNT(*) AS cnt FROM parking_logs WHERE status = 'IN'"
     ).fetchone()
@@ -159,17 +140,7 @@ def _count_vehicles_inside(conn: sqlite3.Connection) -> int:
 
 
 def _calculate_fee(total_minutes: int) -> float:
-    """
-    Tính phí gửi xe theo bảng giá luỹ tiến.
-
-    Quy tắc:
-        ≤ 30 phút             → PRICE_FLOOR  (5.000 VNĐ)
-        > 30 phút & < 60 phút → PRICE_HALF_HOUR (8.000 VNĐ)
-        ≥ 60 phút             → full_hours × PRICE_PER_HOUR
-                                + phút lẻ (≤ 30 → 5.000 | > 30 → 8.000)
-
-    Giá sàn tuyệt đối: PRICE_FLOOR.  Fee không bao giờ âm.
-    """
+    """Tính phí gửi xe theo bảng giá luỹ tiến."""
     if total_minutes <= 0:
         return float(PRICE_FLOOR)
 
@@ -191,10 +162,7 @@ def _calculate_fee(total_minutes: int) -> float:
     return max(float(PRICE_FLOOR), float(fee))
 
 
-# ---------------------------------------------------------------------------
 # API CÔNG KHAI
-# ---------------------------------------------------------------------------
-
 def process_vehicle(plate_number: str, db_path: str = DB_PATH) -> dict:
     """
     Điểm tích hợp chính — gọi từ live_test.py khi OCR đọc được biển số.
@@ -248,9 +216,7 @@ def process_vehicle(plate_number: str, db_path: str = DB_PATH) -> dict:
         now     = datetime.datetime.now()
         now_str = now.strftime(DT_FORMAT)
 
-        # ================================================================
         # TRƯỜNG HỢP 1 — KHÔNG TÌM THẤY BẢN GHI IN → CHECK-IN
-        # ================================================================
         if existing is None:
             # Kiểm tra sức chứa
             current_count = _count_vehicles_inside(conn)
@@ -288,9 +254,7 @@ def process_vehicle(plate_number: str, db_path: str = DB_PATH) -> dict:
                 "max_capacity": max_cap,
             }
 
-        # ================================================================
         # TRƯỜNG HỢP 2 — TÌM THẤY BẢN GHI IN → CHECK-OUT
-        # ================================================================
         ticket_id   = existing["ticket_id"]
         time_in_str = existing["time_in"]
 
@@ -347,16 +311,10 @@ def process_vehicle(plate_number: str, db_path: str = DB_PATH) -> dict:
         conn.close()
 
 
-# ---------------------------------------------------------------------------
+
 # CÁC HÀM THỐNG KÊ (dùng cho Dashboard / Streamlit)
-# ---------------------------------------------------------------------------
-
 def get_status(db_path: str = DB_PATH) -> dict:
-    """
-    Trả về snapshot trạng thái hiện tại của bãi.
-
-    Dùng để cập nhật Dashboard real-time.
-    """
+    """Trả về snapshot trạng thái hiện tại của bãi."""
     conn = _get_connection(db_path)
     try:
         occupancy = _count_vehicles_inside(conn)
@@ -442,10 +400,7 @@ def set_max_capacity(new_capacity: int, db_path: str = DB_PATH) -> bool:
         conn.close()
 
 
-# ---------------------------------------------------------------------------
 # SEMI-MANUAL MODE — Chia sẻ biển số detect được với Dashboard
-# ---------------------------------------------------------------------------
-
 def update_detected_plate(plate_number: str, db_path: str = DB_PATH) -> None:
     """
     Ghi biển số vừa được camera/OCR phát hiện vào bảng parking_config.
@@ -494,10 +449,7 @@ def clear_detected_plate(db_path: str = DB_PATH) -> None:
         conn.close()
 
 
-# ---------------------------------------------------------------------------
 # TIỆN ÍCH NỘI BỘ
-# ---------------------------------------------------------------------------
-
 def _error_result(plate_number: str, message: str, code: str = "ERROR") -> dict:
     return {
         "status":       code,
@@ -509,10 +461,7 @@ def _error_result(plate_number: str, message: str, code: str = "ERROR") -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # CHẠY TRỰC TIẾP — kiểm tra nhanh khi debug
-# ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
     import json
 
