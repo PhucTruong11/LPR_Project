@@ -90,7 +90,7 @@ if "filter_applied"      not in st.session_state: st.session_state.filter_applie
 
 
 # TỰ ĐỘNG KIỂM TRA CAMERA NGOÀI CHẠY NGẦM (REFRESH 3 GIÂY — giảm tải CPU cho mô hình AI)
-@st.fragment(run_every=3)
+@st.fragment(run_every=1)
 def auto_check_camera_ngam():
     # Nếu nhân viên đang quét bằng webcam trình duyệt → không được ghi đè dữ liệu
     if st.session_state.active_source == "browser":
@@ -312,7 +312,7 @@ with col_center:
             st.session_state.last_action_fee   = ""
             st.session_state.last_action_slot  = ""
             st.session_state.last_out_info     = {}
-            st.session_state.need_right_refresh = True  # 👉 Báo hiệu cột phải cần refresh riêng
+            st.session_state.need_right_refresh = True  # Báo hiệu cột phải cần refresh riêng
         else:
             # Tái sử dụng kết quả đã nhận diện trước đó
             bbox = st.session_state.get("last_scanned_bbox")
@@ -401,7 +401,7 @@ with col_center:
                 st.session_state.last_action_slot  = f"Vé #{result.get('ticket_id')}"
                 st.session_state.last_action_fee   = ""
                 st.session_state.last_out_info     = {}
-                st.session_state.action_timestamp  = time.time()  # 👉 Ghi nhận thời điểm xác nhận để auto-clear sau 5s
+                st.session_state.action_timestamp  = time.time()  # Ghi nhận thời điểm xác nhận để auto-clear sau 5s
                 
                 # Làm mới toàn bộ UI: Xóa chữ, Xóa ảnh chụp, Xóa hàng đợi camera ngoài
                 st.session_state.last_scanned      = None 
@@ -425,7 +425,7 @@ with col_center:
                 st.session_state.last_action_plate = final_plate
                 st.session_state.last_action_fee   = f"{result.get('fee', 0):,.0f}đ"
                 st.session_state.last_action_slot  = ""
-                st.session_state.action_timestamp  = time.time()  # 👉 Ghi nhận thời điểm xác nhận để auto-clear sau 5s
+                st.session_state.action_timestamp  = time.time()  # Ghi nhận thời điểm xác nhận để auto-clear sau 5s
                 st.session_state.last_out_info     = record
                 
                 # Làm mới toàn bộ UI: Xóa chữ, Xóa ảnh chụp, Xóa hàng đợi camera ngoài
@@ -441,14 +441,10 @@ with col_center:
                 st.error(result.get("message", "Không tìm thấy xe hoặc xảy ra lỗi hệ thống!"))
 
 
-
-# ══════════════════════════════════════════════════════════════════════
 # HÀM TẠO BIỂU ĐỒ CỘT PLOTLY (Bắt đầu từ 0, trục Y linh hoạt)
-# ══════════════════════════════════════════════════════════════════════
 def make_bar_chart(labels, values, color, y_tick_vals, y_tick_texts, title_y="Doanh thu (đ)", scrollable=False):
     """Tạo biểu đồ cột Plotly với trục Y tùy chỉnh, bắt đầu từ 0."""
     bar_width = 0.5
-    # Nếu cần scroll (nhiều cột), mở rộng chiều ngang tương ứng số cột
     if scrollable and len(labels) > 10:
         chart_width = max(900, len(labels) * 38)
     else:
@@ -486,9 +482,7 @@ def make_bar_chart(labels, values, color, y_tick_vals, y_tick_texts, title_y="Do
     return fig
 
 
-# ══════════════════════════════════════════════════════════════════════
 # CỬA SỔ POP-UP THỐNG KÊ — NGANG RỘNG, 3 LỰA CHỌN
-# ══════════════════════════════════════════════════════════════════════
 @st.dialog("THỐNG KÊ DOANH THU", width="small")
 def show_revenue_stats_modal():
     # Ép dialog về ~60% chiều ngang màn hình bằng JS
@@ -631,17 +625,15 @@ def show_revenue_stats_modal():
         st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════════════════════════════════
 # CỘT PHẢI – TRẠNG THÁI CHỖ TRỐNG & ĐỐI CHIẾU THÔNG TIN CHI TIẾT
-# ══════════════════════════════════════════════════════════════════════
 @st.fragment(run_every=3)
 def render_col_right():
-    # 👉 NẾU CÓ BIỂN SỐ MỚI ĐANG CHỜ XỬ LÝ (last_scanned tồn tại):
+    # NẾU CÓ BIỂN SỐ MỚI ĐANG CHỜ XỬ LÝ (last_scanned tồn tại):
     # Hệ thống sẽ giữ nguyên màn hình, KHÔNG chạy tự động clear thông tin cũ nữa.
     if st.session_state.last_scanned:
         st.session_state.action_timestamp = None
     
-    # 👉 TỰ ĐỘNG RESET SAU 5 GIÂY: Nếu không có biển mới và đã quá 5s kể từ lúc bấm XÁC NHẬN
+    # TỰ ĐỘNG RESET SAU 5 GIÂY: Nếu không có biển mới và đã quá 5s kể từ lúc bấm XÁC NHẬN
     elif st.session_state.action_timestamp and (time.time() - st.session_state.action_timestamp >= 3):
         st.session_state.last_action       = None
         st.session_state.last_action_plate = ""
@@ -689,9 +681,8 @@ def render_col_right():
     st.write("**Biển số xe vừa thao tác:**")
     st.code(st.session_state.last_action_plate or "-- --- --", language="text")
 
-    # ══════════════════════════════════════════════════════════════════════
+
     # KHU VỰC PHÍ GỬI (ĐỒNG BỘ NẰM DƯỚI BIỂN SỐ VÀ LÀM NỔI BẬT)
-    # ══════════════════════════════════════════════════════════════════════
     p_fee = "0đ"
     p_date_in = p_time_in = p_date_out = p_time_out = "--"
 
@@ -719,7 +710,6 @@ def render_col_right():
         st.warning("**Phí gửi:** --đ")
         
     st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-    # ══════════════════════════════════════════════════════════════════════
 
     st.write("**Đối chiếu thời gian:**")
     st.write(f"Ngày vào:     {p_date_in}")
