@@ -26,5 +26,7 @@ def run(input_q, result_q):
                     except Exception:
                         break
                 result_q.put(text)
+            # Nếu text rỗng: không put gì → live_test giữ nguyên confirm_count
+            # (tránh reset counter chỉ vì một frame mờ tạm thời)
         except Exception as e:
             print(f"[OCR Process] Lỗi: {e}")

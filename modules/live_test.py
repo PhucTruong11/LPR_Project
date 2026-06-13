@@ -102,6 +102,11 @@ def run_live_camera(video_source=VIDEO_SOURCE):
     last_ocr_time     = 0.0
     last_verify_time  = 0.0
 
+    # --- Voting: tích lũy 3 lần OCR liên tiếp cùng kết quả mới gửi lên DB ---
+    CONFIRM_THRESHOLD = 3
+    confirm_candidate = ""      # Biển đang được theo dõi
+    confirm_count     = 0       # Số lần liên tiếp đọc được biển này
+
     # Theo dõi vị trí bbox để phát hiện biển số mới
     prev_bbox_center = None
 
@@ -147,6 +152,8 @@ def run_live_camera(video_source=VIDEO_SOURCE):
                         last_shared_plate = ""
                         last_ocr_time     = 0.0
                         last_verify_time  = 0.0
+                        confirm_candidate = ""
+                        confirm_count     = 0
                         # Drain kết quả cũ trong queue
                         while not result_q.empty():
                             try:
@@ -170,6 +177,8 @@ def run_live_camera(video_source=VIDEO_SOURCE):
                     last_text         = ""
                     last_shared_plate = ""
                     prev_bbox_center  = None
+                    confirm_candidate = ""
+                    confirm_count     = 0
 
         # --- Lấy kết quả OCR (non-blocking) ---
         try:
@@ -179,11 +188,27 @@ def run_live_camera(video_source=VIDEO_SOURCE):
                     print(f"[OCR] {last_text!r} → {new_text!r}")
                 last_text = new_text
 
-                # Nhân viên sẽ xem biển số trên Dashboard và bấm XE VÀO / XE RA
+                # --- Voting: tích lũy 3 lần liên tiếp cùng biển số mới gửi DB ---
                 if is_valid_plate(new_text) and new_text != last_shared_plate:
-                    db.update_detected_plate(new_text)
-                    print(f"[DETECT] Biển số hợp lệ: {new_text} → đã gửi lên Dashboard")
-                    last_shared_plate = new_text
+                    if new_text == confirm_candidate:
+                        confirm_count += 1
+                        print(f"[VOTE] {new_text!r} — lần {confirm_count}/{CONFIRM_THRESHOLD}")
+                    else:
+                        # Biển số thay đổi → reset, bắt đầu đếm lại
+                        confirm_candidate = new_text
+                        confirm_count     = 1
+                        print(f"[VOTE] Biển mới {new_text!r} — bắt đầu đếm (1/{CONFIRM_THRESHOLD})")
+
+                    if confirm_count >= CONFIRM_THRESHOLD:
+                        db.update_detected_plate(new_text)
+                        print(f"[DETECT] Xác nhận {CONFIRM_THRESHOLD} lần: {new_text} → gửi lên Dashboard")
+                        last_shared_plate = new_text
+                        confirm_count     = 0  # reset để tránh gửi lại liên tục
+                else:
+                    # Biển không hợp lệ hoặc đã được gửi rồi → reset voting
+                    if new_text != last_shared_plate:
+                        confirm_candidate = ""
+                        confirm_count     = 0
         except Exception:
             pass   # Chưa có kết quả mới → dùng last_text cũ
 

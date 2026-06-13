@@ -16,7 +16,7 @@ BBOX_MISS_THRESHOLD: int = 5 # Số frame miss liên tiếp trước khi xóa bb
 
 
 # OCR
-OCR_COOLDOWN: float = 0.5 # Giây — cooldown tối thiểu giữa 2 lần gửi crop vào OCR queue
+OCR_COOLDOWN: float = 0.3 # 0.5(old) Giây — cooldown tối thiểu giữa 2 lần gửi crop vào OCR queue
 
 BBOX_JUMP_THRESHOLD: int = 60 # Pixel — dịch chuyển tâm bbox > ngưỡng này → coi là biển số MỚI
 

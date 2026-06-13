@@ -1,7 +1,10 @@
 import re
 import cv2
+import logging
 import numpy as np
 from paddleocr import PaddleOCR as POCR
+
+log = logging.getLogger("ocr_engine")
 
 class PlateOCR:
     """
@@ -173,19 +176,19 @@ class PlateOCR:
     def clean_and_fix(self, text):
         # Bước 1: Loại bỏ toàn bộ ký tự đặc biệt (dấu chấm, gạch ngang, khoảng trắng)
         text = re.sub(r'[^A-Z0-9]', '', text.upper())
-        print(f"Sau làm sạch: '{text}'")
+        log.debug("Sau làm sạch: '%s'", text)
 
         # Bước 2: Kiểm tra độ dài — biển số VN hợp lệ có 7-9 ký tự
         if len(text) < 7:
-            print(f"Từ chối: '{text}' — Quá ngắn ({len(text)} ký tự, cần tối thiểu 7)")
+            log.debug("Từ chối: '%s' — Quá ngắn (%d ký tự, cần tối thiểu 7)", text, len(text))
             return ""
         if len(text) > 9:
-            print(f"Từ chối: '{text}' — Quá dài ({len(text)} ký tự, tối đa 9)")
+            log.debug("Từ chối: '%s' — Quá dài (%d ký tự, tối đa 9)", text, len(text))
             return ""
 
         # Bước 3: Áp dụng ép kiểu ký tự bắt buộc theo vị trí
         fixed_text = self.correct_plate_format(text)
-        print(f"Sau sửa lỗi vị trí: '{fixed_text}'")
+        log.debug("Sau sửa lỗi vị trí: '%s'", fixed_text)
 
         # Bước 4: Validate bằng RegEx — chỉ chấp nhận nếu khớp cấu trúc biển số VN
         if self._validate_format(fixed_text):
@@ -193,7 +196,7 @@ class PlateOCR:
         else:
             # Vẫn trả về kết quả đã sửa để nhân viên có thể tham khảo và nhập tay
             # Nếu muốn từ chối hoàn toàn, đổi dòng dưới thành: return ""
-            print(f"Cảnh báo: '{fixed_text}' — Không khớp hoàn toàn nhưng vẫn trả về để tham khảo")
+            log.debug("Cảnh báo: '%s' — Không khớp hoàn toàn nhưng vẫn trả về để tham khảo", fixed_text)
             return fixed_text
 
     def _validate_format(self, text):
@@ -201,15 +204,15 @@ class PlateOCR:
         # Ví dụ hợp lệ: 51G12345, 29A12345, 30HK99999, 59V254411
         pattern = r'^[0-9]{2}[A-Z][A-Z0-9]?[0-9]{4,5}$'
         if re.match(pattern, text):
-            print(f"Biển số HỢP LỆ: {text}")
+            log.debug("Biển số HỢP LỆ: %s", text)
             return True
         else:
             if len(text) < 7:
-                print(f"'{text}' — Quá ngắn")
+                log.debug("'%s' — Quá ngắn", text)
             elif len(text) > 9:
-                print(f"'{text}' — Quá dài")
+                log.debug("'%s' — Quá dài", text)
             else:
-                print(f"'{text}' — Định dạng chưa khớp hoàn toàn")
+                log.debug("'%s' — Định dạng chưa khớp hoàn toàn", text)
             return False
 
     def _load_image(self, image):
