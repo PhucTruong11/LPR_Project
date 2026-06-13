@@ -331,7 +331,7 @@ with col_center:
         else:
             st.warning("Không tìm thấy biển số trong ảnh!")
 
-        st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_container_width=True)  # Ẩn ảnh YOLO bbox
+        # st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_container_width=True)  # Ẩn ảnh YOLO bbox
     else:
         # Nếu trước đó ĐÃ có ảnh (processed_img_id có giá trị) nhưng bây giờ img_buffer lại trống (None)
         # Chứng tỏ người dùng vừa bấm "Clear photo" để xóa ảnh

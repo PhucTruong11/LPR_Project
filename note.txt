@@ -1,0 +1,9 @@
+Vấn đề 1: Gửi biển số từ live_test qua web
+-> Gây xếp hàng
+
+-Giải pháp 1: Tích lũy (n) lần OCR liên tiếp (2-3)
+-Giải pháp 2: ổn định trong X giây liên tiếp thì mới gửi (1-1,5s)
+
+Vấn đề 2: Gửi tt lên web chậm
+
+-Giải pháp 1: Giảm polling interval (run_every=3 -> run_every=1 || 1,5)
