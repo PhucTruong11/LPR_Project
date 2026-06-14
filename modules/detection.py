@@ -6,7 +6,7 @@ model = YOLO("models/best_second.pt")
 
 def detect_license_plate(image):
     
-    results = model(image, verbose=False)
+    results = model(image, verbose=False, imgsz=640)
 
     # Lấy danh sách các bounding boxes
     boxes = results[0].boxes

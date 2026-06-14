@@ -8,7 +8,7 @@ VIDEO_SOURCE: int | str = 0 # Nguồn video: 0 = webcam mặc định, hoặc đ
 
 DISPLAY_SIZE: tuple[int, int] = (640, 480) # Kích thước cửa sổ hiển thị OpenCV (width, height)
 
-YOLO_INTERVAL: int = 3 # Chạy YOLO mỗi N frame (giảm tải CPU, 1 = mỗi frame)
+YOLO_INTERVAL: int = 2 # Chạy YOLO mỗi N frame (giảm tải CPU, 1 = mỗi frame)
 
 YOLO_INPUT_WIDTH: int = 640 # Resize frame về chiều rộng này (px) trước khi đưa vào YOLO
 
@@ -16,11 +16,11 @@ BBOX_MISS_THRESHOLD: int = 5 # Số frame miss liên tiếp trước khi xóa bb
 
 
 # OCR
-OCR_COOLDOWN: float = 0.3 # 0.5(old) Giây — cooldown tối thiểu giữa 2 lần gửi crop vào OCR queue
+OCR_COOLDOWN: float = 0.1 # 0.3(old) Giây — cooldown tối thiểu giữa 2 lần gửi crop vào OCR queue
 
 BBOX_JUMP_THRESHOLD: int = 60 # Pixel — dịch chuyển tâm bbox > ngưỡng này → coi là biển số MỚI
 
-VERIFY_INTERVAL: float = 2.0 # Giây — sau thời gian này, force re-verify để phát hiện xe vào/ra
+VERIFY_INTERVAL: float = 0.1 # Giây — sau thời gian này, force re-verify để phát hiện xe vào/ra
 
 # Regex tối thiểu để coi biển số là hợp lệ (Vietnam plate)
 # Ví dụ hợp lệ: 29A-111.11, 51G1-23456, 30K-999.99

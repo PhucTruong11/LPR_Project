@@ -191,7 +191,7 @@ with col_left:
             if search_hist and search_hist.upper() not in h["plate_number"].upper():
                 continue
             try:
-                log_time_str = h.get("time_in")
+                log_time_str = h.get("time_out") if (h.get("status") == "OUT" and h.get("time_out")) else h.get("time_in")
                 log_datetime = datetime.datetime.fromisoformat(log_time_str)
                 log_date = log_datetime.date()
                 log_time = log_datetime.time()
@@ -412,6 +412,15 @@ with col_center:
                 st.rerun()
                 
             elif s == "CHECK-OUT":
+                time_in_raw = result.get("time_in")
+                try:
+                    dt_in = datetime.datetime.fromisoformat(time_in_raw)
+                    date_in_str = dt_in.strftime("%d/%m/%Y")
+                    time_in_str = dt_in.strftime("%H:%M:%S")
+                except Exception:
+                    date_in_str = fmt_date(time_in_raw)
+                    time_in_str = fmt_time(time_in_raw)
+
                 record = {
                     "plate":     final_plate,
                     "ticket_id": result.get("ticket_id"),
@@ -420,6 +429,8 @@ with col_center:
                     "minutes":   result.get("minutes", 0),
                     "time_out":  now.strftime("%H:%M:%S"),
                     "date_out":  now.strftime("%d/%m/%Y"),
+                    "time_in":   time_in_str,
+                    "date_in":   date_in_str,
                 }
                 st.session_state.last_action       = "out"
                 st.session_state.last_action_plate = final_plate
@@ -533,7 +544,7 @@ def show_revenue_stats_modal():
         values     = [hourly_data[i] for i in range(24)]
         max_val    = max(values) if max(values) > 0 else 100000
         # Trục Y: bước nhảy 25k hoặc tự động scale nếu doanh thu lớn hơn
-        step       = 25000
+        step       = 500000
         top        = max(100000, ((int(max_val) // step) + 2) * step)
         y_ticks    = list(range(0, top + 1, step))
         y_labels   = [f"{v//1000}k" if v > 0 else "0" for v in y_ticks]
@@ -700,11 +711,12 @@ def render_col_right():
     elif action == "out":
         info = st.session_state.last_out_info
         if info:
-            p_date_in  = info.get("date_out", "--")
-            p_time_in  = f"{info.get('hours', 0)}h {info.get('minutes', 0)}m (tổng)"
+            p_date_in  = info.get("date_in", "--")
+            p_time_in  = info.get("time_in", "--")
             p_date_out = info.get("date_out", "--")
             p_time_out = info.get("time_out", "--")
             p_fee      = info.get("fee", "0đ")
+            p_duration = f"{info.get('hours', 0)}h {info.get('minutes', 0)}m"
         st.error(f"**Phí gửi:** {p_fee}")
     else:
         st.warning("**Phí gửi:** --đ")
@@ -716,6 +728,8 @@ def render_col_right():
     st.write(f"Giờ vào:      {p_time_in}")
     st.write(f"Ngày ra:      {p_date_out}")
     st.write(f"Giờ ra:       {p_time_out}")
+    if action == "out" and info:
+        st.write(f"Tổng thời gian đỗ: {p_duration}")
 
     st.divider()
 
