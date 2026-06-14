@@ -102,8 +102,8 @@ def run_live_camera(video_source=VIDEO_SOURCE):
     last_ocr_time     = 0.0
     last_verify_time  = 0.0
 
-    # --- Voting: tích lũy 3 lần OCR liên tiếp cùng kết quả mới gửi lên DB ---
-    CONFIRM_THRESHOLD = 3
+    # --- Voting: tích lũy n lần OCR liên tiếp cùng kết quả mới gửi lên DB ---
+    CONFIRM_THRESHOLD = 2
     confirm_candidate = ""      # Biển đang được theo dõi
     confirm_count     = 0       # Số lần liên tiếp đọc được biển này
 

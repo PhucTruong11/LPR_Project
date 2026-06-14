@@ -295,6 +295,7 @@ def process_vehicle(plate_number: str, db_path: str = DB_PATH) -> dict:
             "time":          now.strftime("%H:%M:%S"),
             "fee":           fee,
             "ticket_id":     ticket_id,
+            "time_in":       time_in_str,
             "total_minutes": total_minutes,
             "hours":         full_hours,
             "minutes":       remaining_mins,
