@@ -60,21 +60,25 @@ Bạn mở **2 terminal riêng biệt** trong VS Code và chạy các lệnh sau
 
 *   **Terminal 1 (Chạy giao diện Web Streamlit):**
     ```bash
-    cd d:\Dev\Language_Python\LPR_Project
+    cd <đường-dẫn-đến-LPR_Project>
     .\lpr_env\Scripts\activate
     streamlit run app_trial.py
     ```
 *   **Terminal 2 (Chạy Camera quét OpenCV):**
     ```bash
-    cd d:\Dev\Language_Python\LPR_Project
+    cd <đường-dẫn-đến-LPR_Project>
     .\lpr_env\Scripts\activate
     python modules/live_test.py
     ```
 
-**Cách hoạt động:**
-1. Khi đưa biển số vào camera (`live_test.py`), hệ thống sẽ phát hiện (YOLO) và đọc chữ (OCR).
-2. Biển số hợp lệ sẽ được ghi tạm vào database `parking.db` (`update_detected_plate`).
-3. Giao diện web (`app_trial.py`) chạy ngầm quét DB mỗi 3 giây và tự điền biển số vào ô "Nhập thủ công" để nhân viên chỉ cần kiểm tra và bấm **XÁC NHẬN**.
+**Cách hoạt động (Luồng Semi-manual chi tiết):**
+1. `live_test.py` khởi chạy **3 thành phần song song**: Luồng đọc camera (`CameraStream` thread), Vòng lặp YOLO chính (Main loop), và Tiến trình OCR con (`ocr_worker_proc.py` - Process riêng).
+2. YOLO chạy mỗi **3 frame** (`YOLO_INTERVAL = 3`) để phát hiện biển số, crop vùng ROI.
+3. OpenCV xử lý ảnh (resize, CLAHE tăng tương phản), chuyển grayscale rồi gửi qua `multiprocessing.Queue` sang tiến trình OCR.
+4. Tiến trình OCR con chạy **PaddleOCR** trích xuất chữ, sửa lỗi vị trí ký tự, validate RegEx.
+5. Kết quả gửi ngược lại Main loop. Cơ chế **Voting** tích lũy — chỉ khi OCR đọc ra **cùng một biển số 3 lần liên tiếp** (`CONFIRM_THRESHOLD = 3`) mới ghi vào DB (`update_detected_plate`).
+6. Giao diện web (`app_trial.py`) tự động quét DB mỗi **5 giây** (`AUTO_REFRESH_SEC = 5`) và điền biển số vào Form.
+7. Nhân viên kiểm tra → bấm **XÁC NHẬN** (ghi giao dịch) hoặc **BỎ QUA** (xóa hàng đợi).
 
 ---
 
@@ -91,23 +95,24 @@ Bạn mở **2 terminal riêng biệt** trong VS Code và chạy các lệnh sau
 
 ### 2. Thuật toán Đồng thuận Nhận diện (Frame Consensus Voting) trong Camera Script
 *   **Vấn đề:** Khi camera bị mờ, rung hoặc biển số di chuyển, OCR chạy liên tục ở mỗi frame có thể trả về một số kết quả sai lệch ngẫu nhiên và gửi ngay lên web gây phiền toái.
-*   **Giải pháp:** Nâng cấp file `modules/live_test.py` với cơ chế bỏ phiếu đồng thuận (Consensus/Voting):
-    *   Thay vì gửi kết quả ngay lập tức khi đọc được biển số hợp lệ lần đầu, hệ thống sẽ lưu trữ kết quả của các frame liên tiếp vào một bộ đệm (buffer).
-    *   Chỉ khi OCR nhận diện ra **cùng một chuỗi biển số chính xác trong N lần liên tiếp** (ví dụ: 3 frame liên tục hoặc 3/5 frame gần nhất), kết quả đó mới được coi là ổn định và gửi lên database.
-    *   Điều này giúp lọc bỏ hoàn toàn các lỗi nhiễu do nháy hình, mờ nét tức thời.
+*   **Giải pháp:** File `modules/live_test.py` đã triển khai cơ chế bỏ phiếu đồng thuận (Consensus/Voting):
+    *   Thay vì gửi kết quả ngay lập tức khi đọc được biển số hợp lệ lần đầu, hệ thống lưu kết quả vào biến `confirm_candidate` và đếm `confirm_count`.
+    *   Chỉ khi OCR nhận diện ra **cùng một chuỗi biển số chính xác trong 3 lần liên tiếp** (`CONFIRM_THRESHOLD = 3`), kết quả đó mới được coi là ổn định và gửi lên database.
+    *   Nếu biển số thay đổi giữa chừng (xe khác đi qua), bộ đếm tự động reset.
+    *   Kết hợp với `BBOX_JUMP_THRESHOLD = 60px`: nếu tâm bbox dịch chuyển quá 60px, hệ thống coi là biển mới → reset toàn bộ state.
 
 ---
 
 ## 📁 Cấu trúc dự án hiện tại
 
-- `app_trial.py`: File chạy chính của ứng dụng web Streamlit (bản thử nghiệm đầy đủ tính năng).
-- `modules/live_test.py`: Script chạy camera OpenCV và giao tiếp multiprocessing với OCR.
-- `modules/ocr_engine.py`: Xử lý nhận dạng chữ trên biển số sử dụng PaddleOCR.
-- `modules/ocr_worker_proc.py`: Worker chạy OCR độc lập để tránh block giao diện camera.
-- `modules/detection.py`: Module chạy mô hình YOLO để xác định vị trí biển số.
-- `modules/processing.py`: Module tiền xử lý ảnh cắt (CLAHE, Grayscale).
-- `modules/database_manager.py`: Quản lý lưu trữ log xe ra vào với SQLite.
-- `modules/config.py`: File cấu hình tập trung các thông số hệ thống.
+- `app_trial.py`: File chạy chính của ứng dụng web Streamlit (bản đầy đủ tính năng).
+- `modules/config.py`: Cấu hình tập trung toàn hệ thống (camera, YOLO, OCR, bảng giá, dashboard).
+- `modules/live_test.py`: Script chạy camera OpenCV, YOLO detect, và giao tiếp Multiprocessing với OCR.
+- `modules/ocr_engine.py`: Xử lý nhận dạng chữ trên biển số sử dụng PaddleOCR + sửa lỗi vị trí + RegEx.
+- `modules/ocr_worker_proc.py`: Worker chạy OCR độc lập trên Process riêng để tránh block giao diện camera.
+- `modules/detection.py`: Module chạy mô hình YOLO (`best_second.pt`) để xác định vị trí biển số.
+- `modules/processing.py`: Module tiền xử lý ảnh cắt (Resize, YUV, CLAHE).
+- `modules/database_manager.py`: Quản lý lưu trữ log xe ra vào, tính phí, thống kê doanh thu với SQLite.
 - `requirements.txt`: Chứa danh sách các thư viện cần cài đặt.
 - `parking.db`: Database cục bộ (tự động tạo ra khi chạy ứng dụng lần đầu).
 
@@ -115,3 +120,4 @@ Bạn mở **2 terminal riêng biệt** trong VS Code và chạy các lệnh sau
 > - Nếu gặp lỗi liên quan đến OCR (ví dụ thiếu thư viện khi chạy `app_trial.py`), hãy chạy lại `pip install paddlepaddle paddleocr` để đảm bảo đã cài đúng bản mới nhất.
 > - Lỗi thiếu model YOLO (`yolov8n.pt`): Model sẽ tự động được tải xuống khi chạy lần đầu, hãy giữ kết nối mạng.
 > - Để thoát màn hình camera OpenCV (`live_test.py`), hãy active cửa sổ camera và nhấn phím **`q`**.
+> - Nếu gặp lỗi `database is locked`: Đảm bảo code đã bật `PRAGMA journal_mode=WAL` (đã cấu hình sẵn trong `database_manager.py`).
