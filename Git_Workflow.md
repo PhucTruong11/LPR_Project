@@ -1,13 +1,13 @@
 # 🛠️ Hướng dẫn sử dụng Git cơ bản cho Dự án LPR
 
-Tài liệu này hướng dẫn cách nhóm 4 người làm việc chung trên cùng một dự án LPR sử dụng Git, tránh xung đột code và đảm bảo code luôn sạch sẽ.
+Tài liệu này hướng dẫn cách nhóm làm việc chung trên cùng một dự án LPR sử dụng Git, tránh xung đột code và đảm bảo code luôn sạch sẽ.
 
 ---
 
 ## 1️⃣ Khởi tạo và Cấu hình Git
 
-**Bước 1: Khởi tạo repository (Chỉ Nhóm trưởng - TV1 thực hiện 1 lần)**
-Nhóm trưởng tạo một repository trên GitHub/GitLab, sau đó đẩy code khung ban đầu lên.
+**Bước 1: Khởi tạo repository (Chỉ Nhóm trưởng thực hiện 1 lần)**
+Nhóm trưởng tạo một repository trên GitHub, sau đó đẩy code khung ban đầu lên.
 
 **Bước 2: Cấu hình thông tin (Tất cả thành viên)**
 Trước khi bắt đầu, mỗi người cần cấu hình tên và email để Git ghi nhận ai là người thực hiện thay đổi:
@@ -16,7 +16,7 @@ git config --global user.name "Tên của bạn"
 git config --global user.email "email_cua_ban@example.com"
 ```
 
-**Bước 3: Clone project về máy (Tất cả thành viên trừ TV1)**
+**Bước 3: Clone project về máy (Tất cả thành viên trừ nhóm trưởng)**
 ```bash
 git clone <URL_CUA_REPOSITORY>
 cd LPR_Project
@@ -51,21 +51,27 @@ Mỗi khi bạn làm xong một tính năng hoặc một đoạn code chạy ổ
 
 ## 3️⃣ Chia nhánh (Branching) & Đặt tên nhánh
 
-Để 4 người không sửa đè lên code của nhau, **MỖI NGƯỜI PHẢI LÀM VIỆC TRÊN MỘT NHÁNH RIÊNG**. Không ai được push trực tiếp vào nhánh `main` (hoặc `master`).
+Để nhiều người không sửa đè lên code của nhau, **MỖI NGƯỜI PHẢI LÀM VIỆC TRÊN MỘT NHÁNH RIÊNG**. Không ai được push trực tiếp vào nhánh `main` (hoặc `master`).
 
-### Quy ước đặt tên nhánh cho 4 thành viên:
-* **Thành viên 1:** `feature-ui` (Làm giao diện và gộp code)
-* **Thành viên 2:** `feature-yolo` (Làm mô hình nhận diện)
-* **Thành viên 3:** `feature-opencv` (Xử lý ảnh bằng OpenCV)
-* **Thành viên 4:** `feature-ocr` (Nhận diện chữ và chuẩn hóa)
+### Quy ước đặt tên nhánh:
+Sử dụng format `feature-<tên-module>` để dễ nhận biết ai đang làm gì:
+
+| Phụ trách | Nhánh |
+|-----------|-------|
+| Giao diện Streamlit & gộp pipeline | `feature-ui` |
+| Mô hình YOLO nhận diện | `feature-yolo` |
+| Xử lý ảnh OpenCV | `feature-opencv` |
+| Nhận diện chữ OCR | `feature-ocr` |
+| Database & tính phí | `feature-database` |
+| Tài liệu & báo cáo | `feature-docs` |
 
 ### Cách tạo và chuyển nhánh:
 ```bash
 # Tạo nhánh mới và chuyển sang nhánh đó ngay lập tức
-git checkout -b <tên_nhánh_của_bạn>
+git checkout -b <tên_nhánh>
 
-# Ví dụ cho Thành viên 2:
-git checkout -b tv2-yolo-detection
+# Ví dụ:
+git checkout -b feature-yolo
 ```
 
 ### Cách cập nhật code mới nhất từ nhánh `main`:
@@ -79,7 +85,27 @@ git merge main
 
 ---
 
-## 4️⃣ Cứu hộ và Xử lý Xung đột (Conflicts)
+## 4️⃣ Tạo Pull Request (PR) để gộp code vào `main`
+
+Khi bạn hoàn thành tính năng trên nhánh của mình và muốn gộp vào `main`, **KHÔNG push trực tiếp** mà phải tạo Pull Request:
+
+### Quy trình tạo PR:
+1. **Push nhánh lên GitHub:**
+   ```bash
+   git push origin <tên_nhánh_của_bạn>
+   ```
+2. **Vào GitHub → Tab "Pull requests" → Bấm "New pull request".**
+3. **Chọn nhánh nguồn** (nhánh của bạn) → **nhánh đích** (`main`).
+4. **Viết mô tả rõ ràng** những gì bạn đã làm và các file bị ảnh hưởng.
+5. **Gửi PR** và chờ nhóm trưởng review.
+
+### Ai có quyền merge?
+- **Nhóm trưởng** là người duy nhất có quyền merge PR vào `main` sau khi kiểm tra code.
+- Nếu có lỗi, nhóm trưởng sẽ comment trên PR yêu cầu sửa → bạn sửa xong push lại → PR tự cập nhật.
+
+---
+
+## 5️⃣ Cứu hộ và Xử lý Xung đột (Conflicts)
 
 Trong quá trình làm việc chung, chắc chắn sẽ có lúc 2 người cùng sửa chung 1 file dẫn đến Conflict (Xung đột).
 
