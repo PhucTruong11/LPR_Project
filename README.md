@@ -176,7 +176,7 @@ Chế độ khuyên dùng cho môi trường bãi đỗ thực tế. Tách biệ
                  ▼
     ┌──────────────────────────────────┐
     │  Quét thấy biển số hợp lệ:       │
-    │  Voting 3 lần → Ghi tạm DB       │
+    │  Voting 2 lần → Ghi tạm DB       │
     │  (parking_config → detected)     │
     └────────────┬─────────────────────┘
                  │

@@ -614,7 +614,7 @@ def show_revenue_stats_modal():
                         daily_data_m[log_dt.day] += float(h.get("fee", 0))
                         total_month_rev           += float(h.get("fee", 0))
                 except:
-                    pass
+                   pass
 
         st.metric(f"Tổng doanh thu Tháng {sel_month}/{sel_year}", f"{total_month_rev:,.0f} đ")
 
